@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "181915445130",
+    "project_id": "algobuddy-bf96c",
+    "storage_bucket": "algobuddy-bf96c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:181915445130:android:07d5c6b60df9417cec4a73",
+        "android_client_info": {
+          "package_name": "com.example.buddy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCRt_EWpY-kz6zsLew02hm0ZBT_6OQ09IM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
