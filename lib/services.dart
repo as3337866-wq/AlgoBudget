@@ -63,6 +63,7 @@ class AuthService {
       '23co56@aiktc.ac.in',
       '23co48@aiktc.ac.in',
       '23dco01@aiktc.ac.in',
+      'abcd@gmail.com'
     ];
     return adminEmails.contains(_auth.currentUser?.email);
   }

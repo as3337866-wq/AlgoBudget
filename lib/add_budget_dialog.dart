@@ -19,6 +19,8 @@ class AddBudgetDialog extends StatefulWidget {
   final double Function(String) getCategoryExpense;
   final Function(Budget) addBudgetToFirestore;
   final VoidCallback onBudgetAdded;
+  final Color primaryColor;
+  final Color secondaryColor;
 
   const AddBudgetDialog({
     super.key,
@@ -33,6 +35,8 @@ class AddBudgetDialog extends StatefulWidget {
     required this.getCategoryExpense,
     required this.addBudgetToFirestore,
     required this.onBudgetAdded,
+    required this.primaryColor,
+    required this.secondaryColor,
   });
 
   @override
@@ -51,7 +55,7 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
     super.initState();
     selectedDate = DateTime.now();
     selectedTime = TimeOfDay.now();
-    selectedExpense = widget.expenseTypes[0];
+    selectedExpense = widget.expenseTypes.isNotEmpty ? widget.expenseTypes[0] : '';
   }
 
   @override
@@ -60,180 +64,243 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
     super.dispose();
   }
 
+  Future<void> _pickImage() async {
+    final pickedFile = await widget.imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (pickedFile != null) setState(() => selectedImage = File(pickedFile.path));
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Add Budget'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: const Text('Date'),
-              subtitle: Text(
-                '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+    if (widget.expenseTypes.isEmpty) {
+      return Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: const Padding(
+          padding: EdgeInsets.all(32),
+          child: Text('No categories available. Please ask admin to add categories.', style: TextStyle(fontSize: 16)),
+        ),
+      );
+    }
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+      elevation: 20,
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 50,
+                  height: 6,
+                  margin: const EdgeInsets.only(bottom: 24),
+                  decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+                ),
               ),
-              trailing: const Icon(Icons.calendar_today),
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: selectedDate,
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime.now(),
-                );
-                if (picked != null) {
-                  setState(() => selectedDate = picked);
-                }
-              },
-            ),
-            ListTile(
-              title: const Text('Time'),
-              subtitle: Text(
-                '${selectedTime.hour}:${selectedTime.minute.toString().padLeft(2, '0')}',
+              const Text('Add Expense', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF1E293B), letterSpacing: -0.5)),
+              const SizedBox(height: 30),
+
+              // Amount Input
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: TextField(
+                  controller: amountController,
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: widget.primaryColor),
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Amount',
+                    labelStyle: const TextStyle(fontSize: 16, color: Colors.grey, fontWeight: FontWeight.normal),
+                    prefixText: '₹ ',
+                    prefixStyle: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: widget.primaryColor),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                  ),
+                ),
               ),
-              trailing: const Icon(Icons.access_time),
-              onTap: () async {
-                final picked = await showTimePicker(
-                  context: context,
-                  initialTime: selectedTime,
-                );
-                if (picked != null) {
-                  setState(() => selectedTime = picked);
-                }
-              },
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: amountController,
-              decoration: const InputDecoration(
-                labelText: 'Amount (₹)',
-                prefixText: '₹ ',
+              const SizedBox(height: 20),
+
+              // Category Dropdown
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+                decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(24)),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    value: selectedExpense,
+                    icon: Icon(Icons.keyboard_arrow_down_rounded, color: widget.primaryColor, size: 30),
+                    style: const TextStyle(color: Color(0xFF1E293B), fontSize: 18, fontWeight: FontWeight.w700),
+                    items: widget.expenseTypes.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                    onChanged: (v) => setState(() => selectedExpense = v!),
+                  ),
+                ),
               ),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: selectedExpense,
-              items: widget.expenseTypes
-                  .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                  .toList(),
-              onChanged: (v) => setState(() => selectedExpense = v!),
-              decoration: const InputDecoration(labelText: 'Expense Type'),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(8),
-              child: Column(
+              const SizedBox(height: 20),
+
+              // Date & Time Row
+              Row(
                 children: [
-                  const SizedBox(height: 8),
-                  if (selectedImage != null)
-                    Stack(
-                      children: [
-                        Image.file(
-                          selectedImage!,
-                          height: 120,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () async {
+                        final picked = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime(2020), lastDate: DateTime.now());
+                        if (picked != null) setState(() => selectedDate = picked);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(24)),
+                        child: Column(
+                          children: [
+                            Icon(Icons.calendar_month_rounded, color: widget.primaryColor),
+                            const SizedBox(height: 8),
+                            Text('${selectedDate.day}/${selectedDate.month}/${selectedDate.year}', style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
+                          ],
                         ),
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() => selectedImage = null);
-                            },
-                            child: Container(
-                              decoration: const BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                              padding: const EdgeInsets.all(4),
-                              child: const Icon(
-                                Icons.close,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () async {
+                        final picked = await showTimePicker(context: context, initialTime: selectedTime);
+                        if (picked != null) setState(() => selectedTime = picked);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(24)),
+                        child: Column(
+                          children: [
+                            Icon(Icons.access_time_filled_rounded, color: widget.primaryColor),
+                            const SizedBox(height: 8),
+                            Text('${selectedTime.hour}:${selectedTime.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-            ),
-          ],
+              const SizedBox(height: 24),
+
+              // Image Picker
+              selectedImage != null
+                  ? Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Image.file(selectedImage!, height: 160, width: double.infinity, fit: BoxFit.cover),
+                  ),
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: GestureDetector(
+                      onTap: () => setState(() => selectedImage = null),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), shape: BoxShape.circle),
+                        child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+                  : GestureDetector(
+                onTap: _pickImage,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  decoration: BoxDecoration(
+                    color: widget.primaryColor.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: widget.primaryColor.withOpacity(0.3), width: 2, style: BorderStyle.solid),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.add_photo_alternate_rounded, color: widget.primaryColor, size: 36),
+                      const SizedBox(height: 8),
+                      Text('Attach Receipt', style: TextStyle(color: widget.primaryColor, fontWeight: FontWeight.bold, fontSize: 16)),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Save Button
+              Container(
+                width: double.infinity,
+                height: 65,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  gradient: LinearGradient(colors: [widget.primaryColor, widget.secondaryColor], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  boxShadow: [BoxShadow(color: widget.primaryColor.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
+                ),
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  ),
+                  onPressed: () async {
+                    if (amountController.text.isEmpty) {
+                      scaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(content: Text('Please enter an amount')));
+                      return;
+                    }
+
+                    final amount = double.parse(amountController.text);
+                    final categoryBudget = widget.categoryBudgets[selectedExpense] ?? 0.0;
+                    final used = widget.getCategoryExpense(selectedExpense);
+
+                    if (categoryBudget > 0 && used + amount > categoryBudget) {
+                      scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('❌ Budget exceeded for $selectedExpense')));
+                      return;
+                    }
+
+                    final dateTime = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, selectedTime.hour, selectedTime.minute);
+                    final budgetId = DateTime.now().millisecondsSinceEpoch.toString();
+                    String? imageUrl;
+
+                    if (selectedImage != null) {
+                      final userId = widget.authService.getCurrentUserId();
+                      imageUrl = await widget.storageService.uploadExpenseImage(userId ?? '', budgetId, selectedImage!);
+                    }
+
+                    final budget = Budget(
+                      id: budgetId,
+                      amount: amount,
+                      expenseType: selectedExpense,
+                      dateTime: dateTime,
+                      profileName: widget.currentProfile,
+                      createdByUsername: widget.currentUsername,
+                      createdBy: FirebaseAuth.instance.currentUser?.uid ?? '',
+                      imageUrl: imageUrl,
+                    );
+
+                    widget.addBudgetToFirestore(budget);
+                    widget.onBudgetAdded();
+                  },
+                  child: const Text('Save Expense', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: 1)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Center(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              )
+            ],
+          ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: () async {
-            if (amountController.text.isEmpty) {
-              scaffoldMessengerKey.currentState?.showSnackBar(
-                const SnackBar(content: Text('Please enter amount')),
-              );
-              return;
-            }
-
-            final amount = double.parse(amountController.text);
-            final categoryBudget =
-                widget.categoryBudgets[selectedExpense] ?? 0.0;
-            final used = widget.getCategoryExpense(selectedExpense);
-
-            if (categoryBudget > 0 && used + amount > categoryBudget) {
-              scaffoldMessengerKey.currentState?.showSnackBar(
-                SnackBar(
-                  backgroundColor: Colors.red,
-                  content: Text('❌ Budget exceeded for $selectedExpense'),
-                ),
-              );
-              return;
-            }
-
-            final dateTime = DateTime(
-              selectedDate.year,
-              selectedDate.month,
-              selectedDate.day,
-              selectedTime.hour,
-              selectedTime.minute,
-            );
-
-            final budgetId = DateTime.now().millisecondsSinceEpoch.toString();
-            String? imageUrl;
-
-            if (selectedImage != null) {
-              final userId = widget.authService.getCurrentUserId();
-              imageUrl = await widget.storageService.uploadExpenseImage(
-                userId ?? '',
-                budgetId,
-                selectedImage!,
-              );
-            }
-
-            final budget = Budget(
-              id: budgetId,
-              amount: amount,
-              expenseType: selectedExpense,
-              dateTime: dateTime,
-              profileName: widget.currentProfile,
-              createdByUsername: widget.currentUsername,
-              createdBy: FirebaseAuth.instance.currentUser?.uid ?? '',
-              imageUrl: imageUrl,
-            );
-
-            widget.addBudgetToFirestore(budget);
-            widget.onBudgetAdded();
-
-            scaffoldMessengerKey.currentState?.showSnackBar(
-              const SnackBar(content: Text('✅ Expense added successfully')),
-            );
-          },
-          child: const Text('Add'),
-        ),
-      ],
     );
   }
 }
