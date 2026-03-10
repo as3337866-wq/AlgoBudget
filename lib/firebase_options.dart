@@ -23,10 +23,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
         return macos;
       case TargetPlatform.windows:
@@ -44,39 +41,49 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBE1Iuo2BdiXxM3sQbuywx7-YWvOZWI27Q',
-    appId: '1:181915445130:web:32e3fae01b321182ec4a73',
-    messagingSenderId: '181915445130',
-    projectId: 'algobuddy-bf96c',
-    authDomain: 'algobuddy-bf96c.firebaseapp.com',
-    storageBucket: 'algobuddy-bf96c.firebasestorage.app',
-    measurementId: 'G-Q809VBZRTV',
+    apiKey: 'AIzaSyAFLF3d7gQH3bz_W1lgUkBAluWFdU0KYys',
+    appId: '1:297251602321:web:3debf580ca7e52bb056430',
+    messagingSenderId: '297251602321',
+    projectId: 'algobudget-3e4d2',
+    authDomain: 'algobudget-3e4d2.firebaseapp.com',
+    storageBucket: 'algobudget-3e4d2.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCRt_EWpY-kz6zsLew02hm0ZBT_6OQ09IM',
-    appId: '1:181915445130:android:07d5c6b60df9417cec4a73',
-    messagingSenderId: '181915445130',
-    projectId: 'algobuddy-bf96c',
-    storageBucket: 'algobuddy-bf96c.firebasestorage.app',
+    apiKey: 'AIzaSyBXL969sMWAKyhB7rqOMv2NJl7W5eHLboA',
+    appId: '1:297251602321:android:9e44c866d88bdd95056430',
+    messagingSenderId: '297251602321',
+    projectId: 'algobudget-3e4d2',
+    storageBucket: 'algobudget-3e4d2.firebasestorage.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyAY8xjbckjSzFbsN4kooF3DXSN3xBoXDOo',
-    appId: '1:181915445130:ios:38013c9ac9a42a0cec4a73',
-    messagingSenderId: '181915445130',
-    projectId: 'algobuddy-bf96c',
-    storageBucket: 'algobuddy-bf96c.firebasestorage.app',
+    apiKey: 'AIzaSyByNRbcm_K8x1UcgzUKunTxjn887vxjFkk',
+    appId: '1:297251602321:ios:cfcfacda963e5ee0056430',
+    messagingSenderId: '297251602321',
+    projectId: 'algobudget-3e4d2',
+    storageBucket: 'algobudget-3e4d2.firebasestorage.app',
+    iosClientId: '297251602321-725mbcbii32v162u42gto0646n8tkkbk.apps.googleusercontent.com',
     iosBundleId: 'com.example.buddy',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyBE1Iuo2BdiXxM3sQbuywx7-YWvOZWI27Q',
-    appId: '1:181915445130:web:31b654d74a16fa89ec4a73',
-    messagingSenderId: '181915445130',
-    projectId: 'algobuddy-bf96c',
-    authDomain: 'algobuddy-bf96c.firebaseapp.com',
-    storageBucket: 'algobuddy-bf96c.firebasestorage.app',
-    measurementId: 'G-N2BZ5WRG9N',
+    apiKey: 'AIzaSyAFLF3d7gQH3bz_W1lgUkBAluWFdU0KYys',
+    appId: '1:297251602321:web:dcd2e759a0b3f030056430',
+    messagingSenderId: '297251602321',
+    projectId: 'algobudget-3e4d2',
+    authDomain: 'algobudget-3e4d2.firebaseapp.com',
+    storageBucket: 'algobudget-3e4d2.firebasestorage.app',
   );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyByNRbcm_K8x1UcgzUKunTxjn887vxjFkk',
+    appId: '1:297251602321:ios:cfcfacda963e5ee0056430',
+    messagingSenderId: '297251602321',
+    projectId: 'algobudget-3e4d2',
+    storageBucket: 'algobudget-3e4d2.firebasestorage.app',
+    iosClientId: '297251602321-725mbcbii32v162u42gto0646n8tkkbk.apps.googleusercontent.com',
+    iosBundleId: 'com.example.buddy',
+  );
+
 }

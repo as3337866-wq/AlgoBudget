@@ -1,26 +1,36 @@
 {
   "project_info": {
-    "project_number": "181915445130",
-    "project_id": "algobuddy-bf96c",
-    "storage_bucket": "algobuddy-bf96c.firebasestorage.app"
+    "project_number": "297251602321",
+    "project_id": "algobudget-3e4d2",
+    "storage_bucket": "algobudget-3e4d2.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:181915445130:android:07d5c6b60df9417cec4a73",
+        "mobilesdk_app_id": "1:297251602321:android:9e44c866d88bdd95056430",
         "android_client_info": {
           "package_name": "com.example.buddy"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "297251602321-h9nloeuhtd3jc1uvfjr88dr21mnttoma.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyCRt_EWpY-kz6zsLew02hm0ZBT_6OQ09IM"
+          "current_key": "AIzaSyBXL969sMWAKyhB7rqOMv2NJl7W5eHLboA"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "297251602321-h9nloeuhtd3jc1uvfjr88dr21mnttoma.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

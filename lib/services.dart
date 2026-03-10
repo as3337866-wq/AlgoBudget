@@ -152,7 +152,8 @@ class BudgetService {
     return _categoryBudgetCol.doc('budgets').snapshots().map((snap) {
       if (snap.exists && snap['budgets'] != null) {
         final data = snap['budgets'] as Map<String, dynamic>;
-        return data.cast<String, double>();
+        // FIX: Safely convert all incoming numbers (int or double) to double
+        return data.map((key, value) => MapEntry(key, (value as num).toDouble()));
       }
       return {};
     });
@@ -163,7 +164,8 @@ class BudgetService {
       final doc = await _categoryBudgetCol.doc('budgets').get();
       if (doc.exists && doc['budgets'] != null) {
         final data = doc['budgets'] as Map<String, dynamic>;
-        return data.cast<String, double>();
+        // FIX: Safely convert all incoming numbers (int or double) to double
+        return data.map((key, value) => MapEntry(key, (value as num).toDouble()));
       }
     } catch (e) {
       return {};
