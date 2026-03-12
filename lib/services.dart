@@ -6,8 +6,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import 'main.dart';
 
-import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 // ==================== AUTH SERVICE ====================
 class AuthService {
@@ -220,11 +220,11 @@ class BudgetService {
   }
 }
 
-// ==================== STORAGE SERVICE (CLOUDINARY) ====================
+// ==================== STORAGE SERVICE ====================
 class StorageService {
-  // TODO: Replace these two variables with your actual Cloudinary details
+  // TODO: Replace these with your actual Cloudinary details
   final String cloudName = 'dar7wm820';
-  final String uploadPreset = 'receipts_cloudinaryT';
+  final String uploadPreset = 'xnblalbp';
 
   Future<String?> uploadExpenseImage(
       String userId,
@@ -233,10 +233,9 @@ class StorageService {
       ) async {
     try {
       final uri = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/upload');
-
       final request = http.MultipartRequest('POST', uri)
         ..fields['upload_preset'] = uploadPreset
-        ..fields['folder'] = 'algobudget/$userId' // Organizes by user in Cloudinary
+        ..fields['folder'] = 'expenses/$userId' // Organizes images into folders
         ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
 
       final response = await request.send();
@@ -259,10 +258,10 @@ class StorageService {
   }
 
   Future<void> deleteExpenseImage(String userId, String expenseId) async {
-    // Note: Deleting securely from Cloudinary via frontend isn't allowed with unsigned presets.
-    // For a free/portfolio app, we simply leave the image in Cloudinary or handle deletion manually.
-    // The Firestore document will still be deleted, so it disappears from the app UI perfectly!
-    print('Image unlinked from budget.');
+    // Note: Deleting images securely from the client-side via Cloudinary requires
+    // an API Secret, which should not be exposed in a Flutter app.
+    // It is best to handle deletions through a backend server.
+    print('Client-side deletion is not supported without exposing Cloudinary API Secret.');
   }
 }
 

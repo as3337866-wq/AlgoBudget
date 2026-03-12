@@ -228,7 +228,9 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
               ),
               const SizedBox(height: 24),
 
-              // Image Picker
+              // ... existing code ...
+
+              // Image Picker (Updated UI)
               selectedImage != null
                   ? Stack(
                 children: [
@@ -258,13 +260,15 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
                   decoration: BoxDecoration(
                     color: widget.primaryColor.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: widget.primaryColor.withOpacity(0.3), width: 2, style: BorderStyle.solid),
+                    // Changed border to red to indicate it is a required field
+                    border: Border.all(color: Colors.redAccent.withOpacity(0.5), width: 2, style: BorderStyle.solid),
                   ),
                   child: Column(
                     children: [
                       Icon(Icons.add_photo_alternate_rounded, color: widget.primaryColor, size: 36),
                       const SizedBox(height: 8),
-                      Text('Attach Receipt', style: TextStyle(color: widget.primaryColor, fontWeight: FontWeight.bold, fontSize: 16)),
+                      // Updated text to explicitly state it is required
+                      Text('Attach Receipt (Required)', style: TextStyle(color: widget.primaryColor, fontWeight: FontWeight.bold, fontSize: 16)),
                     ],
                   ),
                 ),
@@ -293,8 +297,22 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
                       return;
                     }
 
+                    // --- NEW VALIDATION: Check if image is null ---
+                    if (selectedImage == null) {
+                      scaffoldMessengerKey.currentState?.showSnackBar(
+                          const SnackBar(
+                              backgroundColor: Colors.redAccent,
+                              content: Text('❌ A receipt image is required to add an expense.')
+                          )
+                      );
+                      return;
+                    }
+                    // ----------------------------------------------
+
                     final amount = double.parse(amountController.text);
                     final categoryBudget = widget.categoryBudgets[selectedExpense] ?? 0.0;
+
+                    // ... rest of your save logic ...
                     final used = widget.getCategoryExpense(selectedExpense);
 
                     if (categoryBudget > 0 && used + amount > categoryBudget) {

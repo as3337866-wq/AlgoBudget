@@ -248,6 +248,50 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showFullScreenImage(String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.black87, // Dark background to make the image pop
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // InteractiveViewer allows pinch-to-zoom and panning
+              InteractiveViewer(
+                panEnabled: true,
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain, // Ensures the whole image is visible
+                  width: double.infinity,
+                  height: double.infinity,
+                ),
+              ),
+              // Close button in the top right corner
+              Positioned(
+                top: 40,
+                right: 20,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _showManageCategoriesDialog() {
     showDialog(
       context: context,
@@ -1513,8 +1557,35 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 32),
                 const Text('Receipt Image', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
+                // --- UPDATED IMAGE WIDGET ---
                 if (budget.imageUrl != null)
-                  ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.network(budget.imageUrl!, height: 200, width: double.infinity, fit: BoxFit.cover))
+                  GestureDetector(
+                    onTap: () => _showFullScreenImage(budget.imageUrl!),
+                    child: Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.network(
+                              budget.imageUrl!,
+                              height: 200,
+                              width: double.infinity,
+                              fit: BoxFit.cover // Keeps it looking nice in the sheet
+                          ),
+                        ),
+                        // Add a tiny zoom icon overlay so users know it's clickable
+                        Container(
+                          margin: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.fullscreen_rounded, color: Colors.white, size: 20),
+                        )
+                      ],
+                    ),
+                  )
                 else
                   Container(
                     width: double.infinity,
@@ -1522,6 +1593,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(16)),
                     child: const Center(child: Text('No receipt attached', style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic))),
                   ),
+                // -----------------------------
                 const SizedBox(height: 32),
                 if (isOwnExpense)
                   SizedBox(
