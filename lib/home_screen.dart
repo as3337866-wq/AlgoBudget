@@ -123,15 +123,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void addBudgetToFirestore(Budget budget) async => await _budgetService.addBudget(budget);
 
-  void removeBudgetFromFirestore(String id, String budgetCreatedBy) async {
+  void removeBudgetFromFirestore(Budget budget) async {
     final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser?.uid != budgetCreatedBy) {
+    final isAdmin = _authService.isAdmin();
+
+    if (currentUser?.uid != budget.createdBy && !isAdmin) {
       scaffoldMessengerKey.currentState?.showSnackBar(
         const SnackBar(content: Text('You can only delete your own expenses'), behavior: SnackBarBehavior.floating),
       );
       return;
     }
-    await _budgetService.deleteBudget(id);
+
+    // 1. Delete the image from Cloudinary to free up storage space
+    if (budget.imageUrl != null && budget.imageUrl!.contains('cloudinary')) {
+      await _storageService.deleteCloudinaryImage(budget.imageUrl!);
+    }
+
+    // 2. Delete the expense from Firestore
+    await _budgetService.deleteBudget(budget.id);
   }
 
   String _formatDate(DateTime date) {
@@ -1595,7 +1604,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 // -----------------------------
                 const SizedBox(height: 32),
-                if (isOwnExpense)
+                if (isOwnExpense || isAdmin) // Added || isAdmin here
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -1606,8 +1615,16 @@ class _HomeScreenState extends State<HomeScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
                       ),
                       onPressed: () {
-                        removeBudgetFromFirestore(budget.id, budget.createdBy);
+                        // 1. Instantly close the bottom sheet so the UI feels perfectly responsive
                         Navigator.pop(context);
+
+                        // 2. Trigger the deletion in the background (Passes the whole budget object now)
+                        removeBudgetFromFirestore(budget);
+
+                        // 3. Show a quick confirmation toast
+                        scaffoldMessengerKey.currentState?.showSnackBar(
+                            const SnackBar(content: Text('Expense deleted Successfully'), behavior: SnackBarBehavior.floating)
+                        );
                       },
                       child: const Text('Delete Transaction', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)),
                     ),

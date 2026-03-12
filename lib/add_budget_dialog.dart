@@ -53,6 +53,10 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
   File? selectedImage;
   Team? selectedTeam;
 
+  // New tracking variables for validation
+  bool _hasAttemptedSave = false;
+  String? _errorMessage;
+
   @override
   void initState() {
     super.initState();
@@ -260,14 +264,15 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
                   decoration: BoxDecoration(
                     color: widget.primaryColor.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(24),
-                    // Changed border to red to indicate it is a required field
-                    border: Border.all(color: Colors.redAccent.withOpacity(0.5), width: 2, style: BorderStyle.solid),
+                    // Only turns red if they clicked Save AND no image is selected
+                    border: (_hasAttemptedSave && selectedImage == null)
+                        ? Border.all(color: Colors.redAccent, width: 2, style: BorderStyle.solid)
+                        : Border.all(color: Colors.transparent, width: 2),
                   ),
                   child: Column(
                     children: [
                       Icon(Icons.add_photo_alternate_rounded, color: widget.primaryColor, size: 36),
                       const SizedBox(height: 8),
-                      // Updated text to explicitly state it is required
                       Text('Attach Receipt (Required)', style: TextStyle(color: widget.primaryColor, fontWeight: FontWeight.bold, fontSize: 16)),
                     ],
                   ),
@@ -275,6 +280,16 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
               ),
 
               const SizedBox(height: 32),
+
+              // In-Dialog Error Message (Shows directly inside the modal so it's readable)
+              if (_errorMessage != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                  child: Text('❌ $_errorMessage', style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14)),
+                ),
 
               // Save Button
               Container(
@@ -292,33 +307,33 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                   ),
                   onPressed: () async {
+                    setState(() => _hasAttemptedSave = true); // Triggers red outline if image is missing
+
                     if (amountController.text.isEmpty) {
-                      scaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(content: Text('Please enter an amount')));
+                      setState(() => _errorMessage = 'Please enter an amount.');
                       return;
                     }
 
-                    // --- NEW VALIDATION: Check if image is null ---
                     if (selectedImage == null) {
-                      scaffoldMessengerKey.currentState?.showSnackBar(
-                          const SnackBar(
-                              backgroundColor: Colors.redAccent,
-                              content: Text('❌ A receipt image is required to add an expense.')
-                          )
-                      );
+                      setState(() => _errorMessage = 'A receipt image is required to add an expense.');
                       return;
                     }
-                    // ----------------------------------------------
 
-                    final amount = double.parse(amountController.text);
+                    final amount = double.tryParse(amountController.text);
+                    if (amount == null || amount <= 0) {
+                      setState(() => _errorMessage = 'Please enter a valid amount.');
+                      return;
+                    }
+
                     final categoryBudget = widget.categoryBudgets[selectedExpense] ?? 0.0;
-
-                    // ... rest of your save logic ...
                     final used = widget.getCategoryExpense(selectedExpense);
 
                     if (categoryBudget > 0 && used + amount > categoryBudget) {
-                      scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('❌ Budget exceeded for $selectedExpense')));
+                      setState(() => _errorMessage = 'Budget exceeded for $selectedExpense.');
                       return;
                     }
+
+                    setState(() => _errorMessage = null); // Clear errors if successful
 
                     final dateTime = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, selectedTime.hour, selectedTime.minute);
                     final budgetId = DateTime.now().millisecondsSinceEpoch.toString();
@@ -326,7 +341,13 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
 
                     if (selectedImage != null) {
                       final userId = widget.authService.getCurrentUserId();
-                      imageUrl = await widget.storageService.uploadExpenseImage(userId ?? '', budgetId, selectedImage!);
+                      imageUrl = await widget.storageService.uploadExpenseImage(
+                        userId: userId ?? 'unknown',
+                        budgetId: budgetId,
+                        imageFile: selectedImage!,
+                        teamId: selectedTeam?.id,
+                        expenseType: selectedExpense,
+                      );
                     }
 
                     final budget = Budget(

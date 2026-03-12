@@ -9,6 +9,9 @@ import 'main.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+
+import 'package:cloudinary_public/cloudinary_public.dart';
+
 // ==================== AUTH SERVICE ====================
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -226,33 +229,39 @@ class StorageService {
   final String cloudName = 'dar7wm820';
   final String uploadPreset = 'xnblalbp';
 
-  Future<String?> uploadExpenseImage(
-      String userId,
-      String expenseId,
-      File imageFile,
-      ) async {
+  Future<String?> uploadExpenseImage({
+    required String userId,
+    required String budgetId,
+    required File imageFile,
+    String? teamId,
+    required String expenseType,
+  }) async {
     try {
-      final uri = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/upload');
-      final request = http.MultipartRequest('POST', uri)
-        ..fields['upload_preset'] = uploadPreset
-        ..fields['folder'] = 'expenses/$userId' // Organizes images into folders
-        ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+      final year = DateTime.now().year.toString();
+      final month = DateTime.now().month.toString().padLeft(2, '0');
 
-      final response = await request.send();
-
-      if (response.statusCode == 200) {
-        final responseData = await response.stream.toBytes();
-        final responseString = String.fromCharCodes(responseData);
-        final jsonMap = jsonDecode(responseString);
-
-        // Return the secure URL provided by Cloudinary
-        return jsonMap['secure_url'];
+      String folderPath;
+      if (teamId != null) {
+        folderPath = 'algobudget/teams/$teamId/$year/$month';
       } else {
-        print('Cloudinary upload failed with status: ${response.statusCode}');
-        return null;
+        folderPath = 'algobudget/personal/$userId/$year/$month';
       }
+
+      // Replace these with your actual Cloudinary details
+      final cloudinary = CloudinaryPublic('dar7wm820', 'receipts_cloudinary', cache: false);
+
+      CloudinaryResponse response = await cloudinary.uploadFile(
+        CloudinaryFile.fromFile(
+          imageFile.path,
+          folder: folderPath,
+          publicId: 'receipt_$budgetId',
+          tags: ['receipt', expenseType, teamId ?? 'personal'],
+        ),
+      );
+
+      return response.secureUrl;
     } catch (e) {
-      print('Error uploading image to Cloudinary: $e');
+      print("Cloudinary Upload Error: $e");
       return null;
     }
   }
@@ -262,6 +271,43 @@ class StorageService {
     // an API Secret, which should not be exposed in a Flutter app.
     // It is best to handle deletions through a backend server.
     print('Client-side deletion is not supported without exposing Cloudinary API Secret.');
+  }
+
+  // Permanently delete image from Cloudinary
+  Future<void> deleteCloudinaryImage(String imageUrl) async {
+    try {
+      // 1. Extract the "public_id" from the image URL
+      final parts = imageUrl.split('/upload/');
+      if (parts.length < 2) return;
+
+      String publicId = parts[1];
+      // Remove the version tag (e.g., v1712345678/)
+      if (publicId.startsWith('v') && publicId.contains('/')) {
+        publicId = publicId.substring(publicId.indexOf('/') + 1);
+      }
+      // Remove the file extension (.jpg or .png)
+      if (publicId.contains('.')) {
+        publicId = publicId.substring(0, publicId.lastIndexOf('.'));
+      }
+
+      // 2. YOUR CLOUDINARY CREDENTIALS (Find these on your dashboard)
+      const String cloudName = 'YOUR_CLOUD_NAME';
+      const String apiKey = 'YOUR_API_KEY';
+      const String apiSecret = 'YOUR_API_SECRET';
+
+      // 3. Send the secure destroy request
+      final uri = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/destroy');
+      await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Basic ${base64Encode(utf8.encode('$apiKey:$apiSecret'))}',
+        },
+        body: {'public_id': publicId},
+      );
+      print('Cloudinary Image Deleted!');
+    } catch (e) {
+      print("Cloudinary Delete Error: $e");
+    }
   }
 }
 
