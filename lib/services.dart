@@ -6,6 +6,9 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import 'main.dart';
 
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
 // ==================== AUTH SERVICE ====================
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -217,9 +220,11 @@ class BudgetService {
   }
 }
 
-// ==================== STORAGE SERVICE ====================
+// ==================== STORAGE SERVICE (CLOUDINARY) ====================
 class StorageService {
-  final _storage = FirebaseStorage.instance;
+  // TODO: Replace these two variables with your actual Cloudinary details
+  final String cloudName = 'dar7wm820';
+  final String uploadPreset = 'receipts_cloudinaryT';
 
   Future<String?> uploadExpenseImage(
       String userId,
@@ -227,25 +232,40 @@ class StorageService {
       File imageFile,
       ) async {
     try {
-      final path = 'expenses/$userId/$expenseId.jpg';
-      await _storage.ref(path).putFile(imageFile);
-      final url = await _storage.ref(path).getDownloadURL();
-      return url;
+      final uri = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/upload');
+
+      final request = http.MultipartRequest('POST', uri)
+        ..fields['upload_preset'] = uploadPreset
+        ..fields['folder'] = 'algobudget/$userId' // Organizes by user in Cloudinary
+        ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+
+      final response = await request.send();
+
+      if (response.statusCode == 200) {
+        final responseData = await response.stream.toBytes();
+        final responseString = String.fromCharCodes(responseData);
+        final jsonMap = jsonDecode(responseString);
+
+        // Return the secure URL provided by Cloudinary
+        return jsonMap['secure_url'];
+      } else {
+        print('Cloudinary upload failed with status: ${response.statusCode}');
+        return null;
+      }
     } catch (e) {
-      print('Error uploading image: $e');
+      print('Error uploading image to Cloudinary: $e');
       return null;
     }
   }
 
   Future<void> deleteExpenseImage(String userId, String expenseId) async {
-    try {
-      final path = 'expenses/$userId/$expenseId.jpg';
-      await _storage.ref(path).delete();
-    } catch (e) {
-      print('Error deleting image: $e');
-    }
+    // Note: Deleting securely from Cloudinary via frontend isn't allowed with unsigned presets.
+    // For a free/portfolio app, we simply leave the image in Cloudinary or handle deletion manually.
+    // The Firestore document will still be deleted, so it disappears from the app UI perfectly!
+    print('Image unlinked from budget.');
   }
 }
+
 
 // ==================== TEAM MODEL ====================
 class Team {
@@ -280,14 +300,23 @@ class TeamService {
         .toJson());
   }
 
-  // NEW: Add a user by their UID directly
   Future<void> addMemberById(String teamId, String userId) async {
     await _db.collection('teams').doc(teamId).update({
       'members': FieldValue.arrayUnion([userId])
     });
   }
 
-  // Keep the old email method as fallback
+  Future<void> removeMemberById(String teamId, String userId) async {
+    await _db.collection('teams').doc(teamId).update({
+      'members': FieldValue.arrayRemove([userId])
+    });
+  }
+
+  // NEW: Delete Entire Team
+  Future<void> deleteTeam(String teamId) async {
+    await _db.collection('teams').doc(teamId).delete();
+  }
+
   Future<String?> addMemberByEmail(String teamId, String email) async {
     final userQuery = await _db
         .collection('users')
@@ -311,14 +340,16 @@ class TeamService {
         .map((snap) => snap.docs.map((d) => Team.fromJson(d.data())).toList());
   }
 
-  // NEW: Fetch all registered users to display in the dropdown
   Future<List<Map<String, dynamic>>> getAllRegisteredUsers() async {
     final snapshot = await _db.collection('users').get();
     return snapshot.docs.map((doc) {
+      final data = doc.data();
       return {
         'uid': doc.id,
-        'email': doc['email'],
-        'username': doc['username'],
+        'email': data['email'] ?? '',
+        'username': data['username'] ?? 'Unknown User',
+        // Check if user is admin based on flag or hardcoded logic
+        'isAdmin': data['isAdmin'] == true || data['role'] == 'admin',
       };
     }).toList();
   }

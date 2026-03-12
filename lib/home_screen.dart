@@ -1,5 +1,6 @@
 // home_screen.dart
 
+import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -34,7 +35,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String currentProfile = 'You';
   bool isExpanded = false;
 
-  // For managing activity navigation easily
   String _selectedCategoryFilter = 'All';
 
   List<String> expenseTypes = [
@@ -47,7 +47,6 @@ class _HomeScreenState extends State<HomeScreen> {
     'Other',
   ];
 
-  // Modern, Bright Fintech Color Palette
   final Color primaryColor = const Color(0xFF2563EB); // Vibrant Royal Blue
   final Color secondaryColor = const Color(0xFF06B6D4); // Bright Cyan
   final Color bgColor = const Color(0xFFF8FAFC); // Clean Slate Off-White
@@ -103,7 +102,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return budgets.where((b) {
       if (isAdmin) return b.profileName == currentProfile;
-      // Show if user created it OR if it belongs to a team the user is in
       return b.createdBy == currentUserId || (b.teamId != null && userTeamIds.contains(b.teamId));
     }).toList();
   }
@@ -134,6 +132,17 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     await _budgetService.deleteBudget(id);
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final target = DateTime(date.year, date.month, date.day);
+
+    if (target == today) return 'Today';
+    if (target == yesterday) return 'Yesterday';
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
   // --- DIALOGS ---
@@ -276,12 +285,24 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: ListTile(
                                 title: Text(type, style: const TextStyle(fontWeight: FontWeight.bold)),
                                 subtitle: Text('Limit: ₹${limit.toStringAsFixed(0)}', style: TextStyle(color: primaryColor, fontWeight: FontWeight.w600)),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                                  onPressed: () async {
-                                    setDialogState(() => expenseTypes.removeAt(index));
-                                    await _budgetService.saveExpenseTypes(expenseTypes);
-                                  },
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(Icons.edit_rounded, color: primaryColor),
+                                      onPressed: () {
+                                        Navigator.pop(dialogContext);
+                                        _showEditExpenseLimitDialog(type, limit);
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                                      onPressed: () async {
+                                        setDialogState(() => expenseTypes.removeAt(index));
+                                        await _budgetService.saveExpenseTypes(expenseTypes);
+                                      },
+                                    ),
+                                  ],
                                 ),
                               ),
                             );
@@ -306,6 +327,80 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               );
             }
+        );
+      },
+    );
+  }
+
+  void _showEditExpenseLimitDialog(String category, double currentLimit) {
+    final limitController = TextEditingController(text: currentLimit > 0 ? currentLimit.toStringAsFixed(0) : '');
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Edit Limit: $category', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: limitController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'New Monthly Limit',
+                    prefixText: '₹ ',
+                    filled: true,
+                    fillColor: Colors.grey.shade100,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.pop(dialogContext);
+                          _showManageCategoriesDialog();
+                        },
+                        child: Text('Cancel', style: TextStyle(color: Colors.grey.shade600, fontSize: 16)),
+                      ),
+                    ),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        onPressed: () async {
+                          final newLimitStr = limitController.text.trim();
+                          if (newLimitStr.isEmpty) return;
+                          final newLimit = double.tryParse(newLimitStr);
+                          if (newLimit == null) return;
+
+                          final updatedBudgets = Map<String, double>.from(categoryBudgets);
+                          updatedBudgets[category] = newLimit;
+                          await _budgetService.setCategoryBudgets(updatedBudgets);
+
+                          if (mounted) {
+                            Navigator.pop(dialogContext);
+                            _showManageCategoriesDialog();
+                          }
+                        },
+                        child: const Text('Save Limit', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                )
+              ],
+            ),
+          ),
         );
       },
     );
@@ -415,10 +510,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _handleTeamsAction() {
     if (userTeams.isEmpty) {
-      // If no teams exist, force them to create one first
       _showCreateTeamDialog();
     } else {
-      // If teams exist, manage the first team
       _showManageSpecificTeamDialog(userTeams.first);
     }
   }
@@ -474,7 +567,6 @@ class _HomeScreenState extends State<HomeScreen> {
                             nameController.text.trim(),
                             _authService.getCurrentUserId()!);
                         if (mounted) Navigator.pop(context);
-                        // Open the management dialog immediately after creation
                         Future.delayed(const Duration(milliseconds: 300), () {
                           if (userTeams.isNotEmpty) {
                             _showManageSpecificTeamDialog(userTeams.first);
@@ -504,14 +596,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showManageSpecificTeamDialog(Team team) {
+  void _showManageSpecificTeamDialog(Team initialTeam) {
     bool isAdding = false;
     String? selectedUserId;
 
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return StatefulBuilder(builder: (context, setDialogState) {
+          final team = userTeams.firstWhere((t) => t.id == initialTeam.id, orElse: () => initialTeam);
+
           return Dialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             child: Padding(
@@ -522,105 +616,220 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const SizedBox(
                         height: 150,
-                        child: Center(child: CircularProgressIndicator()));
+                        child: Center(child: CircularProgressIndicator(strokeWidth: 2)));
                   }
 
-                  // Filter out users who are already in the team
-                  final availableUsers = (snapshot.data ?? [])
-                      .where((u) => !team.members.contains(u['uid']))
-                      .toList();
+                  final allUsers = snapshot.data ?? [];
+                  final availableUsers = allUsers.where((u) => !team.members.contains(u['uid'])).toList();
+                  final currentMembers = allUsers.where((u) => team.members.contains(u['uid'])).toList();
 
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text('Manage: ${team.name}',
-                                style: const TextStyle(
-                                    fontSize: 18, fontWeight: FontWeight.bold),
-                                overflow: TextOverflow.ellipsis),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                                color: secondaryColor.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12)),
-                            child: Text('${team.members.length} Members',
-                                style: TextStyle(
-                                    color: secondaryColor,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12)),
-                          )
-                        ],
-                      ),
-                      const Divider(height: 32),
-                      const Text('Add Member',
-                          style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 12),
-                      if (availableUsers.isEmpty)
-                        const Text('No new registered users to add.',
-                            style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic))
-                      else
-                        DropdownButtonFormField<String>(
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                              filled: true,
-                              fillColor: Colors.grey.shade100,
-                              border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide.none)),
-                          hint: const Text('Select a registered user'),
-                          value: selectedUserId,
-                          items: availableUsers.map((user) {
-                            return DropdownMenuItem<String>(
-                              value: user['uid'],
-                              child: Text('${user['username']} (${user['email']})', overflow: TextOverflow.ellipsis),
-                            );
-                          }).toList(),
-                          onChanged: (val) {
-                            setDialogState(() => selectedUserId = val);
-                          },
+                  final myUserId = _authService.getCurrentUserId();
+                  final isOwner = team.createdBy == myUserId;
+
+                  return SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text('Manage: ${team.name}',
+                                  style: const TextStyle(
+                                      fontSize: 18, fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                  color: secondaryColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12)),
+                              child: Text('${team.members.length} Members',
+                                  style: TextStyle(
+                                      color: secondaryColor,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12)),
+                            )
+                          ],
                         ),
-                      const SizedBox(height: 20),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                            backgroundColor: secondaryColor,
-                            minimumSize: const Size(double.infinity, 50),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12))),
-                        onPressed: (isAdding || selectedUserId == null)
-                            ? null
-                            : () async {
-                          setDialogState(() => isAdding = true);
-                          try {
-                            await _teamService.addMemberById(
-                                team.id, selectedUserId!);
-                            scaffoldMessengerKey.currentState?.showSnackBar(
-                                const SnackBar(
-                                    content:
-                                    Text('Member added successfully!')));
-                            if (mounted) Navigator.pop(context);
-                          } catch (e) {
-                            setDialogState(() => isAdding = false);
-                          }
-                        },
-                        child: isAdding
-                            ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2))
-                            : const Text('Add to Team',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold)),
-                      ),
-                    ],
+
+                        const Divider(height: 32),
+
+                        // --- CURRENT MEMBERS LIST ---
+                        const Text('Current Members',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 12),
+                        Container(
+                          constraints: const BoxConstraints(maxHeight: 200),
+                          decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade200)
+                          ),
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            itemCount: currentMembers.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final member = currentMembers[index];
+                              final bool isMemberOwner = member['uid'] == team.createdBy;
+                              final bool isMe = member['uid'] == myUserId;
+                              final bool isAppAdmin = member['isAdmin'] == true;
+
+                              return ListTile(
+                                dense: true,
+                                leading: CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: primaryColor.withOpacity(0.1),
+                                  child: Icon(isMemberOwner ? Icons.star_rounded : Icons.person, color: primaryColor, size: 16),
+                                ),
+                                title: Text(member['username'] + (isMe ? ' (You)' : ''), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                subtitle: (isAppAdmin || isMemberOwner)
+                                    ? null
+                                    : Text(member['email'], style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                trailing: (isOwner && !isMemberOwner) || (isMe && !isMemberOwner)
+                                    ? IconButton(
+                                  icon: const Icon(Icons.person_remove_rounded, color: Colors.redAccent, size: 20),
+                                  onPressed: () async {
+                                    try {
+                                      await _teamService.removeMemberById(team.id, member['uid']);
+                                      setDialogState((){});
+                                      if (isMe && mounted) {
+                                        Navigator.pop(dialogContext);
+                                      }
+                                    } catch(e) {
+                                      scaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(content: Text('Failed to remove member')));
+                                    }
+                                  },
+                                )
+                                    : isMemberOwner
+                                    ? Text('Admin', style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.bold))
+                                    : null,
+                              );
+                            },
+                          ),
+                        ),
+
+                        const Divider(height: 32),
+
+                        // --- ADD NEW MEMBER ---
+                        const Text('Add Member',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 12),
+                        if (availableUsers.isEmpty)
+                          const Text('No new registered users to add.',
+                              style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic))
+                        else
+                          DropdownButtonFormField<String>(
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                                filled: true,
+                                fillColor: Colors.grey.shade100,
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none)),
+                            hint: const Text('Select a registered user'),
+                            value: selectedUserId,
+                            items: availableUsers.map((user) {
+                              final bool isAppAdmin = user['isAdmin'] == true;
+                              return DropdownMenuItem<String>(
+                                value: user['uid'],
+                                child: Text(
+                                    isAppAdmin
+                                        ? '${user['username']} (Admin)'
+                                        : '${user['username']} (${user['email']})',
+                                    overflow: TextOverflow.ellipsis
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              setDialogState(() => selectedUserId = val);
+                            },
+                          ),
+                        const SizedBox(height: 20),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: secondaryColor,
+                              minimumSize: const Size(double.infinity, 50),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12))),
+                          onPressed: (isAdding || selectedUserId == null)
+                              ? null
+                              : () async {
+                            setDialogState(() => isAdding = true);
+                            try {
+                              await _teamService.addMemberById(
+                                  team.id, selectedUserId!);
+                              scaffoldMessengerKey.currentState?.showSnackBar(
+                                  const SnackBar(
+                                      content: Text('Member added successfully!')));
+
+                              selectedUserId = null;
+                              setDialogState(() => isAdding = false);
+                            } catch (e) {
+                              setDialogState(() => isAdding = false);
+                            }
+                          },
+                          child: isAdding
+                              ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2))
+                              : const Text('Add to Team',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+
+                        // --- DELETE TEAM BUTTON ---
+                        if (isOwner) ...[
+                          const SizedBox(height: 24),
+                          const Divider(),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.redAccent,
+                                    side: BorderSide(color: Colors.redAccent.withOpacity(0.5)),
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                                ),
+                                icon: const Icon(Icons.delete_forever_rounded),
+                                label: const Text('Delete Entire Team', style: TextStyle(fontWeight: FontWeight.bold)),
+                                onPressed: () async {
+                                  bool confirm = await showDialog(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                          title: const Text('Delete Team?'),
+                                          content: const Text('This will permanently delete the team. You will be able to create a new one afterwards.'),
+                                          actions: [
+                                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                                            ElevatedButton(
+                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                                onPressed: () => Navigator.pop(ctx, true),
+                                                child: const Text('Delete', style: TextStyle(color: Colors.white))
+                                            ),
+                                          ]
+                                      )
+                                  ) ?? false;
+
+                                  if (confirm) {
+                                    await _teamService.deleteTeam(team.id);
+                                    if (mounted) {
+                                      Navigator.pop(dialogContext);
+                                      scaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(content: Text('Team successfully deleted')));
+                                    }
+                                  }
+                                }
+                            ),
+                          )
+                        ]
+                      ],
+                    ),
                   );
                 },
               ),
@@ -631,34 +840,93 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- FULL SCREEN ACTIVITY MODAL ---
-  void _showFullActivityModal(List<String> allGroupKeys, Map<String, List<Budget>> groupedBudgets, bool isAdmin) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        final categoryLabel = _selectedCategoryFilter == 'All' ? 'Transactions' : '$_selectedCategoryFilter Transactions';
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.9,
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+  void _openAdminDayScreen(String dateKey, List<Budget> dayBudgets, bool isAdmin) {
+    // Group transactions by Team vs Individual user
+    Map<String, List<Budget>> groupedByEntity = {};
+    for (var budget in dayBudgets) {
+      final entityKey = budget.teamName != null
+          ? 'Team: ${budget.teamName}'
+          : 'Personal: ${budget.createdByUsername}';
+
+      if (!groupedByEntity.containsKey(entityKey)) {
+        groupedByEntity[entityKey] = [];
+      }
+      groupedByEntity[entityKey]!.add(budget);
+    }
+    List<String> entityKeys = groupedByEntity.keys.toList();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          backgroundColor: bgColor,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            iconTheme: IconThemeData(color: textDark),
+            title: Text('$dateKey Activity', style: TextStyle(color: textDark, fontWeight: FontWeight.w900)),
+            centerTitle: true,
           ),
-          child: Column(
-            children: [
-              const SizedBox(height: 16),
-              Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
-              const SizedBox(height: 24),
-              Text('All $categoryLabel', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: textDark)),
-              const SizedBox(height: 8),
-              Expanded(
-                child: _buildGroupedDatesList(allGroupKeys, groupedBudgets, isAdmin, bottomPadding: 40),
-              ),
-            ],
+          body: ListView.builder(
+            padding: const EdgeInsets.all(24),
+            physics: const BouncingScrollPhysics(),
+            itemCount: entityKeys.length,
+            itemBuilder: (context, index) {
+              String entityKey = entityKeys[index];
+              List<Budget> entityBudgets = groupedByEntity[entityKey]!;
+              double entityTotal = entityBudgets.fold(0, (sum, b) => sum + b.amount);
+
+              bool isPersonal = entityKey.startsWith('Personal');
+              Color groupColor = isPersonal ? secondaryColor : primaryColor;
+              String displayName = entityKey.split(': ')[1];
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.grey.shade200),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+                ),
+                child: Theme(
+                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    iconColor: groupColor,
+                    collapsedIconColor: Colors.grey.shade400,
+                    tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    leading: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: groupColor.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+                      child: Icon(isPersonal ? Icons.person : Icons.groups_rounded, color: groupColor),
+                    ),
+                    title: Text(displayName, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: textDark)),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Text('${entityBudgets.length} Transactions • Total: ₹${entityTotal.toStringAsFixed(0)}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w500)),
+                    ),
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        decoration: BoxDecoration(
+                            color: bgColor.withOpacity(0.5),
+                            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24))
+                        ),
+                        child: Column(
+                          children: entityBudgets.map((budget) {
+                            final isOwnExpense = FirebaseAuth.instance.currentUser?.uid == budget.createdBy;
+                            return _buildCompactTransactionTile(budget, isAdmin, isOwnExpense, isPersonal);
+                          }).toList(),
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -692,6 +960,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 final currentTotal = getCurrentProfileTotal();
                 final remainingBudget = masterBudget - totalExpenses;
 
+                // Calculate Spending Split
+                final personalSpending = currentProfileBudgets.where((b) => b.teamName == null).fold(0.0, (sum, b) => sum + b.amount);
+                final teamSpending = currentProfileBudgets.where((b) => b.teamName != null).fold(0.0, (sum, b) => sum + b.amount);
+
                 if (!isAdmin && !isExpanded) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (mounted) setState(() => isExpanded = true);
@@ -704,162 +976,128 @@ class _HomeScreenState extends State<HomeScreen> {
                   displayBudgets = currentProfileBudgets.where((b) => b.expenseType == _selectedCategoryFilter).toList();
                 }
 
-                // GROUPING BY TEAM FOR FOLDERS
+                // SORT BY DATE
+                displayBudgets.sort((a, b) => b.dateTime.compareTo(a.dateTime));
+
+                // GROUPING BY DATE
                 Map<String, List<Budget>> groupedBudgets = {};
                 for (var budget in displayBudgets) {
-                  final groupKey = budget.teamName ?? 'Personal'; // Group by Team
-                  if (!groupedBudgets.containsKey(groupKey)) {
-                    groupedBudgets[groupKey] = [];
+                  final dateKey = _formatDate(budget.dateTime);
+                  if (!groupedBudgets.containsKey(dateKey)) {
+                    groupedBudgets[dateKey] = [];
                   }
-                  groupedBudgets[groupKey]!.add(budget);
+                  groupedBudgets[dateKey]!.add(budget);
                 }
 
                 List<String> allGroupKeys = groupedBudgets.keys.toList();
-
-                // Truncate logic for home screen: Only show Top 3
-                final recentGroupKeys = allGroupKeys.take(3).toList();
-                final hasMore = allGroupKeys.length > 3;
 
                 return Scaffold(
                   backgroundColor: bgColor,
                   appBar: _buildAppBar(isAdmin),
                   drawer: _buildDrawer(isAdmin),
                   body: SafeArea(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildWelcomeHeader(isAdmin),
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildWelcomeHeader(isAdmin),
 
-                        if (isAdmin)
-                          _buildDashboardCard(remainingBudget, totalExpenses, isMaster: true)
-                        else
-                          _buildDashboardCard(currentTotal, 0, isMaster: false),
-
-                        const SizedBox(height: 24),
-
-                        // Teams quick-access and Activity header
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                isAdmin ? 'Activity Overview' : 'My Activity',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textDark),
-                              ),
-                              InkWell(
-                                onTap: _handleTeamsAction,
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: primaryColor.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.group_add_rounded, size: 16, color: primaryColor),
-                                      const SizedBox(width: 6),
-                                      Text('Teams', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 13)),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // NEW TEAMS HORIZONTAL DISPLAY
-                        if (userTeams.isNotEmpty)
-                          Container(
-                            height: 90,
-                            margin: const EdgeInsets.only(top: 16),
-                            child: ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 24),
-                              scrollDirection: Axis.horizontal,
-                              physics: const BouncingScrollPhysics(),
-                              itemCount: userTeams.length,
-                              itemBuilder: (context, index) {
-                                final team = userTeams[index];
-                                final bool isOwner = team.createdBy == _authService.getCurrentUserId();
-                                return GestureDetector(
-                                  onTap: () => _showManageSpecificTeamDialog(team),
-                                  child: Container(
-                                    width: 200,
-                                    margin: const EdgeInsets.only(right: 16),
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: isOwner ? primaryColor.withOpacity(0.08) : Colors.white,
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(
-                                          color: isOwner ? primaryColor.withOpacity(0.3) : Colors.grey.shade200),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Icon(Icons.groups_rounded,
-                                                color: isOwner ? primaryColor : Colors.grey.shade600, size: 20),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: Text(
-                                                team.name,
-                                                style: TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 15,
-                                                    color: textDark),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
+                          if (userTeams.isNotEmpty)
+                            Container(
+                              height: 76,
+                              margin: const EdgeInsets.only(bottom: 24),
+                              child: ListView.builder(
+                                padding: const EdgeInsets.symmetric(horizontal: 24),
+                                scrollDirection: Axis.horizontal,
+                                physics: const BouncingScrollPhysics(),
+                                itemCount: userTeams.length,
+                                itemBuilder: (context, index) {
+                                  final team = userTeams[index];
+                                  final bool isOwner = team.createdBy == _authService.getCurrentUserId();
+                                  return GestureDetector(
+                                    onTap: () => _showManageSpecificTeamDialog(team),
+                                    child: Container(
+                                      width: MediaQuery.of(context).size.width * 0.75,
+                                      margin: const EdgeInsets.only(right: 16),
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                            color: isOwner ? primaryColor.withOpacity(0.4) : Colors.grey.shade300,
+                                            width: isOwner ? 1.5 : 1.0),
+                                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 4))],
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                                color: primaryColor.withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(10)
                                             ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          '${team.members.length} Members${isOwner ? ' • Admin' : ''}',
-                                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                                        ),
-                                      ],
+                                            child: Icon(Icons.groups_rounded, color: primaryColor, size: 20),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  team.name,
+                                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textDark),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  '${team.members.length} Members${isOwner ? ' • Admin' : ''}',
+                                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                );
-                              },
+                                  );
+                                },
+                              ),
+                            ),
+
+                          if (isAdmin)
+                            _buildDashboardCard(remainingBudget, totalExpenses, isMaster: true, personalSpending: personalSpending, teamSpending: teamSpending)
+                          else
+                            _buildDashboardCard(currentTotal, 0, isMaster: false, personalSpending: personalSpending, teamSpending: teamSpending),
+
+                          const SizedBox(height: 32),
+
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                            child: Text(
+                              isAdmin ? 'Org Activity' : 'My Activity',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textDark),
                             ),
                           ),
 
-                        _buildCategoryFilters(),
+                          _buildCategoryFilters(),
 
-                        Expanded(
-                          child: allGroupKeys.isEmpty
-                              ? _buildEmptyState(isAdmin)
-                              : Column(
-                            children: [
-                              Expanded(
-                                  child: _buildGroupedDatesList(recentGroupKeys, groupedBudgets, isAdmin, bottomPadding: hasMore ? 16 : 100)
-                              ),
-                              if (hasMore)
-                                Container(
-                                  width: double.infinity,
-                                  margin: const EdgeInsets.only(left: 24, right: 24, bottom: 90), // Clears the FAB
-                                  child: OutlinedButton(
-                                    style: OutlinedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(vertical: 16),
-                                        side: BorderSide(color: primaryColor.withOpacity(0.3), width: 1.5),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))
-                                    ),
-                                    onPressed: () => _showFullActivityModal(allGroupKeys, groupedBudgets, isAdmin),
-                                    child: Text(
-                                        'View All ${allGroupKeys.length} Teams/Folders',
-                                        style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 15)
-                                    ),
-                                  ),
-                                )
-                            ],
-                          ),
-                        ),
-                      ],
+                          if (allGroupKeys.isEmpty)
+                            _buildEmptyState(isAdmin)
+                          else
+                            _buildGroupedDatesList(
+                              allGroupKeys,
+                              groupedBudgets,
+                              isAdmin,
+                              bottomPadding: 100,
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                   floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
@@ -882,8 +1120,28 @@ class _HomeScreenState extends State<HomeScreen> {
       title: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.pie_chart_rounded, color: primaryColor, size: 24),
-          const SizedBox(width: 8),
+          // --- UPDATED SVG WITH BORDER AND BACKGROUND ---
+          Container(
+            padding: const EdgeInsets.all(4), // Gives a little breathing room inside the border
+            decoration: BoxDecoration(
+              color: Colors.black, // Solid white background prevents blending
+              borderRadius: BorderRadius.circular(8), // Smooth rounded corners
+              border: Border.all(color: Colors.grey.shade300, width: 1.5), // Subtle border
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                )
+              ],
+            ),
+            child: SvgPicture.asset(
+              'assets/icon/Algo.svg',
+              height: 22, // Slightly reduced to account for the padding
+              width: 22,
+            ),
+          ),
+          const SizedBox(width: 10),
           Text('AlgoBudget', style: TextStyle(color: textDark, fontWeight: FontWeight.w900, letterSpacing: -0.5, fontSize: 20)),
         ],
       ),
@@ -905,20 +1163,41 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildWelcomeHeader(bool isAdmin) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 10, 24, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(isAdmin ? 'Overview,' : 'Welcome back,', style: TextStyle(fontSize: 16, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
-          Text(
-            currentUsername.isNotEmpty ? currentUsername : (isAdmin ? 'Admin' : 'User'),
-            style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: textDark, letterSpacing: -1),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(isAdmin ? 'Overview,' : 'Welcome back,', style: TextStyle(fontSize: 16, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
+                Text(
+                  currentUsername.isNotEmpty ? currentUsername : (isAdmin ? 'Admin' : 'User'),
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: textDark, letterSpacing: -1),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              foregroundColor: Colors.white,
+              elevation: 3,
+              shadowColor: primaryColor.withOpacity(0.4),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            onPressed: _handleTeamsAction,
+            icon: const Icon(Icons.groups_rounded, size: 20),
+            label: const Text('Teams', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDashboardCard(double mainAmount, double subAmount, {required bool isMaster}) {
+  Widget _buildDashboardCard(double mainAmount, double subAmount, {required bool isMaster, required double personalSpending, required double teamSpending}) {
     return GestureDetector(
       onTap: isMaster ? () => setState(() => isExpanded = !isExpanded) : null,
       child: AnimatedContainer(
@@ -926,7 +1205,7 @@ class _HomeScreenState extends State<HomeScreen> {
         curve: Curves.fastOutSlowIn,
         width: double.infinity,
         margin: const EdgeInsets.symmetric(horizontal: 24),
-        padding: const EdgeInsets.all(28),
+        padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(32),
           gradient: LinearGradient(colors: [primaryColor, secondaryColor], begin: Alignment.topLeft, end: Alignment.bottomRight),
@@ -954,6 +1233,35 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 24),
             Text('₹ ${mainAmount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w900, letterSpacing: -1)),
+
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.person, color: Colors.white, size: 14),
+                      const SizedBox(width: 6),
+                      Text('Personal: ₹${personalSpending.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.groups_rounded, color: Colors.white, size: 14),
+                      const SizedBox(width: 6),
+                      Text('Team: ₹${teamSpending.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
 
             if (isMaster && isExpanded) ...[
               const SizedBox(height: 24),
@@ -1031,96 +1339,130 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildGroupedDatesList(List<String> groupKeys, Map<String, List<Budget>> groupedBudgets, bool isAdmin, {double bottomPadding = 100}) {
+  Widget _buildGroupedDatesList(List<String> groupKeys, Map<String, List<Budget>> groupedBudgets, bool isAdmin, {double bottomPadding = 100, bool shrinkWrap = false, ScrollPhysics? physics}) {
     return ListView.builder(
-      padding: EdgeInsets.fromLTRB(24, 8, 24, bottomPadding),
-      physics: const BouncingScrollPhysics(),
+      shrinkWrap: shrinkWrap,
+      physics: physics ?? const BouncingScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(24, 0, 24, bottomPadding),
       itemCount: groupKeys.length,
       itemBuilder: (context, index) {
-        String groupKey = groupKeys[index];
-        List<Budget> groupBudgets = groupedBudgets[groupKey]!;
+        String dateKey = groupKeys[index];
+        List<Budget> dayBudgets = groupedBudgets[dateKey]!;
 
-        double groupTotal = groupBudgets.fold(0, (sum, b) => sum + b.amount);
+        // ==========================================
+        // ADMIN VIEW: Clickable Date Summary Cards
+        // ==========================================
+        if (isAdmin) {
+          double dayTotal = dayBudgets.fold(0, (sum, b) => sum + b.amount);
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.grey.shade200),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
-          ),
-          child: Theme(
-            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
-              iconColor: primaryColor,
-              collapsedIconColor: Colors.grey.shade400,
-              tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              leading: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: primaryColor.withOpacity(0.08), borderRadius: BorderRadius.circular(14)),
-                child: Icon(groupKey == 'Personal' ? Icons.person : Icons.groups_rounded, color: primaryColor),
+          return InkWell(
+            onTap: () => _openAdminDayScreen(dateKey, dayBudgets, isAdmin),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 4))],
               ),
-              title: Text(groupKey, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: textDark)),
-              subtitle: Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: Text('${groupBudgets.length} Bills • Total: ₹${groupTotal.toStringAsFixed(0)}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w500)),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: primaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                        child: Icon(Icons.calendar_month_rounded, color: primaryColor, size: 22),
+                      ),
+                      const SizedBox(width: 16),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(dateKey, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: textDark)),
+                          const SizedBox(height: 4),
+                          Text('${dayBudgets.length} Transactions', style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Text('₹${dayTotal.toStringAsFixed(0)}', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: textDark)),
+                      const SizedBox(width: 8),
+                      Icon(Icons.chevron_right_rounded, color: Colors.grey.shade400),
+                    ],
+                  )
+                ],
               ),
-              children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  decoration: BoxDecoration(
-                      color: bgColor.withOpacity(0.5),
-                      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24))
-                  ),
-                  child: Column(
-                    children: groupBudgets.map((budget) {
-                      final isOwnExpense = FirebaseAuth.instance.currentUser?.uid == budget.createdBy;
-                      return _buildCompactTransactionTile(budget, isAdmin, isOwnExpense);
-                    }).toList(),
-                  ),
-                )
-              ],
             ),
+          );
+        }
+
+        // ==========================================
+        // REGULAR USER VIEW: Detailed Chronological Feed
+        // ==========================================
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(dateKey, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey.shade500, letterSpacing: 0.5)),
+              const SizedBox(height: 12),
+              ...dayBudgets.map((budget) {
+                final isOwnExpense = FirebaseAuth.instance.currentUser?.uid == budget.createdBy;
+                final isPersonal = budget.teamName == null;
+                return _buildCompactTransactionTile(budget, isAdmin, isOwnExpense, isPersonal);
+              }).toList(),
+            ],
           ),
         );
       },
     );
   }
 
-  Widget _buildCompactTransactionTile(Budget budget, bool isAdmin, bool isOwnExpense) {
+  Widget _buildCompactTransactionTile(Budget budget, bool isAdmin, bool isOwnExpense, bool isPersonal) {
+    Color itemColor = isPersonal ? secondaryColor : primaryColor;
+
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () => _showTransactionDetailsBottomSheet(budget, isAdmin, isOwnExpense),
       child: Container(
-        margin: const EdgeInsets.only(top: 8),
+        margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 4))],
         ),
         child: Row(
           children: [
             Container(
-              height: 38,
-              width: 38,
-              decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(10)),
-              child: Icon(Icons.receipt_long_rounded, color: Colors.grey.shade700, size: 18),
+              height: 46,
+              width: 46,
+              decoration: BoxDecoration(color: itemColor.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+              child: Icon(isPersonal ? Icons.person : Icons.groups_rounded, color: itemColor, size: 22),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(budget.expenseType, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: textDark)),
-                  const SizedBox(height: 2),
-                  Text('${budget.dateTime.day}/${budget.dateTime.month}/${budget.dateTime.year} - By: ${budget.createdByUsername}', style: TextStyle(fontSize: 11, color: secondaryColor, fontWeight: FontWeight.bold)),
+                  Text(budget.expenseType, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: textDark)),
+                  const SizedBox(height: 4),
+                  Text(
+                      isPersonal ? 'Personal • By ${budget.createdByUsername}' : '${budget.teamName} • By ${budget.createdByUsername}',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis
+                  ),
                 ],
               ),
             ),
-            Text('- ₹${budget.amount.toStringAsFixed(0)}', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: textDark)),
+            Text('- ₹${budget.amount.toStringAsFixed(0)}', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: textDark)),
           ],
         ),
       ),
@@ -1219,20 +1561,23 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildEmptyState(bool isAdmin) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20)]),
-            child: Icon(Icons.rocket_launch_rounded, color: secondaryColor, size: 48),
-          ),
-          const SizedBox(height: 24),
-          Text(isAdmin && _selectedCategoryFilter == 'All' ? 'No Org Expenses Yet' : 'No expenses found!', style: TextStyle(color: textDark, fontSize: 20, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          Text('Hit the button below to add an expense.', style: TextStyle(color: Colors.grey.shade500, fontSize: 15)),
-        ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 60),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20)]),
+              child: Icon(Icons.rocket_launch_rounded, color: secondaryColor, size: 48),
+            ),
+            const SizedBox(height: 24),
+            Text(isAdmin && _selectedCategoryFilter == 'All' ? 'No Org Expenses Yet' : 'No expenses found!', style: TextStyle(color: textDark, fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            Text('Hit the button below to add an expense.', style: TextStyle(color: Colors.grey.shade500, fontSize: 15)),
+          ],
+        ),
       ),
     );
   }

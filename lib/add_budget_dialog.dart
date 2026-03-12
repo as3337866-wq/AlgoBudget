@@ -8,7 +8,7 @@ import 'main.dart';
 import 'services.dart';
 
 class AddBudgetDialog extends StatefulWidget {
-  final List<Team> userTeams; // NEW: Pass user teams
+  final List<Team> userTeams;
   final List<String> expenseTypes;
   final Map<String, double> categoryBudgets;
   final String currentProfile;
@@ -51,7 +51,7 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
   final amountController = TextEditingController();
   late String selectedExpense;
   File? selectedImage;
-  Team? selectedTeam; // NEW: Track selected team
+  Team? selectedTeam;
 
   @override
   void initState() {
@@ -59,6 +59,11 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
     selectedDate = DateTime.now();
     selectedTime = TimeOfDay.now();
     selectedExpense = widget.expenseTypes.isNotEmpty ? widget.expenseTypes[0] : '';
+
+    // Automatically select the user's team if they belong to one
+    if (widget.userTeams.isNotEmpty) {
+      selectedTeam = widget.userTeams.first;
+    }
   }
 
   @override
@@ -68,7 +73,14 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
   }
 
   Future<void> _pickImage() async {
-    final pickedFile = await widget.imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    final pickedFile = await widget.imagePicker.pickImage(
+      source: ImageSource.gallery,
+      // INCREASED quality for text readability
+      imageQuality: 90,
+      // CAPPING dimensions so it doesn't upload a massive 4K file
+      maxWidth: 1600,
+      maxHeight: 1600,
+    );
     if (pickedFile != null) setState(() => selectedImage = File(pickedFile.path));
   }
 
@@ -147,7 +159,7 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
               ),
               const SizedBox(height: 20),
 
-              // NEW: Team Dropdown Selection
+              // Team Dropdown Selection
               if (widget.userTeams.isNotEmpty) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
@@ -160,8 +172,8 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
                       icon: Icon(Icons.groups_rounded, color: widget.primaryColor, size: 30),
                       style: const TextStyle(color: Color(0xFF1E293B), fontSize: 18, fontWeight: FontWeight.w700),
                       items: [
-                        const DropdownMenuItem(value: null, child: Text("Personal (No Team)")),
-                        ...widget.userTeams.map((t) => DropdownMenuItem(value: t, child: Text(t.name))),
+                        const DropdownMenuItem(value: null, child: Text("Personal Expense")),
+                        ...widget.userTeams.map((t) => DropdownMenuItem(value: t, child: Text('Team: ${t.name}'))),
                       ],
                       onChanged: (v) => setState(() => selectedTeam = v),
                     ),
@@ -308,8 +320,8 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
                       createdByUsername: widget.currentUsername,
                       createdBy: FirebaseAuth.instance.currentUser?.uid ?? '',
                       imageUrl: imageUrl,
-                      teamId: selectedTeam?.id,        // NEW
-                      teamName: selectedTeam?.name,    // NEW
+                      teamId: selectedTeam?.id,
+                      teamName: selectedTeam?.name,
                     );
 
                     widget.addBudgetToFirestore(budget);
