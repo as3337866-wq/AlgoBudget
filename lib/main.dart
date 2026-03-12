@@ -30,6 +30,8 @@ class Budget {
   final String createdBy;
   final String? imageUrl;
   final String? imagePath;
+  final String? teamId;   // NEW: Team ID
+  final String? teamName; // NEW: Team Name
 
   Budget({
     required this.id,
@@ -41,6 +43,8 @@ class Budget {
     required this.createdBy,
     this.imageUrl,
     this.imagePath,
+    this.teamId,
+    this.teamName,
   });
 
   Map<String, dynamic> toJson() => {
@@ -52,6 +56,8 @@ class Budget {
     'createdByUsername': createdByUsername,
     'createdBy': createdBy,
     if (imageUrl != null) 'imageUrl': imageUrl,
+    'teamId': teamId,
+    'teamName': teamName,
   };
 
   factory Budget.fromJson(Map<String, dynamic> json) => Budget(
@@ -63,12 +69,14 @@ class Budget {
     createdByUsername: json['createdByUsername'] ?? 'Unknown',
     createdBy: json['createdBy'] ?? '',
     imageUrl: json['imageUrl'],
+    teamId: json['teamId'],
+    teamName: json['teamName'],
   );
 }
 
 // ==================== GLOBALS ====================
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
-    GlobalKey<ScaffoldMessengerState>();
+GlobalKey<ScaffoldMessengerState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

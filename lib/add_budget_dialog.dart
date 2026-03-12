@@ -8,6 +8,7 @@ import 'main.dart';
 import 'services.dart';
 
 class AddBudgetDialog extends StatefulWidget {
+  final List<Team> userTeams; // NEW: Pass user teams
   final List<String> expenseTypes;
   final Map<String, double> categoryBudgets;
   final String currentProfile;
@@ -24,6 +25,7 @@ class AddBudgetDialog extends StatefulWidget {
 
   const AddBudgetDialog({
     super.key,
+    required this.userTeams,
     required this.expenseTypes,
     required this.categoryBudgets,
     required this.currentProfile,
@@ -49,6 +51,7 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
   final amountController = TextEditingController();
   late String selectedExpense;
   File? selectedImage;
+  Team? selectedTeam; // NEW: Track selected team
 
   @override
   void initState() {
@@ -143,6 +146,29 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
                 ),
               ),
               const SizedBox(height: 20),
+
+              // NEW: Team Dropdown Selection
+              if (widget.userTeams.isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+                  decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(24)),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<Team?>(
+                      isExpanded: true,
+                      value: selectedTeam,
+                      hint: const Text("Select Team (Optional)", style: TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.w600)),
+                      icon: Icon(Icons.groups_rounded, color: widget.primaryColor, size: 30),
+                      style: const TextStyle(color: Color(0xFF1E293B), fontSize: 18, fontWeight: FontWeight.w700),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text("Personal (No Team)")),
+                        ...widget.userTeams.map((t) => DropdownMenuItem(value: t, child: Text(t.name))),
+                      ],
+                      onChanged: (v) => setState(() => selectedTeam = v),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
 
               // Date & Time Row
               Row(
@@ -282,6 +308,8 @@ class _AddBudgetDialogState extends State<AddBudgetDialog> {
                       createdByUsername: widget.currentUsername,
                       createdBy: FirebaseAuth.instance.currentUser?.uid ?? '',
                       imageUrl: imageUrl,
+                      teamId: selectedTeam?.id,        // NEW
+                      teamName: selectedTeam?.name,    // NEW
                     );
 
                     widget.addBudgetToFirestore(budget);

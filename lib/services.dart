@@ -12,10 +12,10 @@ class AuthService {
   final _db = FirebaseFirestore.instance;
 
   Future<UserCredential> signUp(
-    String email,
-    String password,
-    String username,
-  ) async {
+      String email,
+      String password,
+      String username,
+      ) async {
     final userCredential = await _auth.createUserWithEmailAndPassword(
       email: email,
       password: password,
@@ -91,6 +91,8 @@ class BudgetService {
       'createdBy': FirebaseAuth.instance.currentUser?.uid,
       'createdByUsername': budget.createdByUsername,
       if (budget.imageUrl != null) 'imageUrl': budget.imageUrl,
+      'teamId': budget.teamId,
+      'teamName': budget.teamName,
     });
   }
 
@@ -104,9 +106,9 @@ class BudgetService {
         .snapshots()
         .map(
           (snap) => snap.docs
-              .map((d) => Budget.fromJson(d.data() as Map<String, dynamic>))
-              .toList(),
-        );
+          .map((d) => Budget.fromJson(d.data() as Map<String, dynamic>))
+          .toList(),
+    );
   }
 
   // ---------- MASTER BUDGET ----------
@@ -204,17 +206,15 @@ class BudgetService {
   }
 
   /// Watch expense types in real-time
-/// Watch expense types in real-time
-Stream<List<String>> watchExpenseTypes() {
-  return _expenseTypesDoc.snapshots().map((doc) {
-    if (doc.exists) {
-      final data = doc.data() as Map<String, dynamic>;
-      return List<String>.from(data['types'] ?? []);
-    }
-    return [];
-  });
-}
-
+  Stream<List<String>> watchExpenseTypes() {
+    return _expenseTypesDoc.snapshots().map((doc) {
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        return List<String>.from(data['types'] ?? []);
+      }
+      return [];
+    });
+  }
 }
 
 // ==================== STORAGE SERVICE ====================
@@ -222,10 +222,10 @@ class StorageService {
   final _storage = FirebaseStorage.instance;
 
   Future<String?> uploadExpenseImage(
-    String userId,
-    String expenseId,
-    File imageFile,
-  ) async {
+      String userId,
+      String expenseId,
+      File imageFile,
+      ) async {
     try {
       final path = 'expenses/$userId/$expenseId.jpg';
       await _storage.ref(path).putFile(imageFile);
@@ -244,5 +244,53 @@ class StorageService {
     } catch (e) {
       print('Error deleting image: $e');
     }
+  }
+}
+
+// ==================== TEAM MODEL ====================
+class Team {
+  final String id;
+  final String name;
+  final String createdBy;
+  final List<String> members; // List of user UIDs
+
+  Team({required this.id, required this.name, required this.createdBy, required this.members});
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'createdBy': createdBy, 'members': members};
+
+  factory Team.fromJson(Map<String, dynamic> json) => Team(
+      id: json['id'],
+      name: json['name'],
+      createdBy: json['createdBy'],
+      members: List<String>.from(json['members'] ?? [])
+  );
+}
+
+// ==================== TEAM SERVICE ====================
+class TeamService {
+  final _db = FirebaseFirestore.instance;
+
+  Future<void> createTeam(String name, String currentUserId) async {
+    final doc = _db.collection('teams').doc();
+    await doc.set(Team(id: doc.id, name: name, createdBy: currentUserId, members: [currentUserId]).toJson());
+  }
+
+  Future<String?> addMemberByEmail(String teamId, String email) async {
+    final userQuery = await _db.collection('users').where('email', isEqualTo: email.trim()).get();
+    if (userQuery.docs.isNotEmpty) {
+      final userId = userQuery.docs.first.id;
+      await _db.collection('teams').doc(teamId).update({
+        'members': FieldValue.arrayUnion([userId])
+      });
+      return "Member added successfully!";
+    }
+    return "User not found. Ensure they have registered.";
+  }
+
+  Stream<List<Team>> watchUserTeams(String userId) {
+    return _db.collection('teams')
+        .where('members', arrayContains: userId)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => Team.fromJson(d.data())).toList());
   }
 }

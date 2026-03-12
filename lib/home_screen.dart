@@ -1,5 +1,6 @@
 // home_screen.dart
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
@@ -18,10 +19,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _budgetService = BudgetService();
   final _authService = AuthService();
+  final _teamService = TeamService();
   final _storageService = StorageService();
   final _imagePicker = ImagePicker();
 
   List<Budget> budgets = [];
+  List<Team> userTeams = [];
+  StreamSubscription? _teamSubscription;
+
   String currentUsername = '';
   double masterBudget = 0.0;
   double totalExpenses = 0.0;
@@ -53,6 +58,26 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadUsername();
     _loadExpenseTypes();
+    _listenToTeams();
+  }
+
+  @override
+  void dispose() {
+    _teamSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _listenToTeams() {
+    final currentUserId = _authService.getCurrentUserId();
+    if (currentUserId != null) {
+      _teamSubscription = _teamService.watchUserTeams(currentUserId).listen((teams) {
+        if (mounted) {
+          setState(() {
+            userTeams = teams;
+          });
+        }
+      });
+    }
   }
 
   Future<void> _loadExpenseTypes() async {
@@ -72,12 +97,14 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Budget> getCurrentProfileBudgets() {
     final isAdmin = _authService.isAdmin();
     final currentUserId = _authService.getCurrentUserId();
+    final userTeamIds = userTeams.map((t) => t.id).toList();
 
     if (isAdmin && currentProfile == 'All') return budgets;
 
     return budgets.where((b) {
       if (isAdmin) return b.profileName == currentProfile;
-      return b.createdBy == currentUserId;
+      // Show if user created it OR if it belongs to a team the user is in
+      return b.createdBy == currentUserId || (b.teamId != null && userTeamIds.contains(b.teamId));
     }).toList();
   }
 
@@ -86,10 +113,12 @@ class _HomeScreenState extends State<HomeScreen> {
   double getCategoryExpense(String category) {
     final isAdmin = _authService.isAdmin();
     final currentUserId = _authService.getCurrentUserId();
+    final userTeamIds = userTeams.map((t) => t.id).toList();
+
     final filtered = budgets.where((b) {
       final matchesCategory = b.expenseType == category;
       if (isAdmin) return matchesCategory;
-      return matchesCategory && b.createdBy == currentUserId;
+      return matchesCategory && (b.createdBy == currentUserId || (b.teamId != null && userTeamIds.contains(b.teamId)));
     });
     return filtered.fold(0, (sum, budget) => sum + budget.amount);
   }
@@ -382,8 +411,125 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // --- UPDATED: Manage Teams Dialog with robust error checking ---
+  void _showManageTeamsDialog() {
+    final nameController = TextEditingController();
+    final emailController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        bool isCreating = false;
+        bool isAdding = false;
+
+        return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return Dialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Create a Team', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: nameController,
+                          decoration: InputDecoration(
+                              labelText: 'Team Name',
+                              filled: true,
+                              fillColor: Colors.grey.shade100,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              minimumSize: const Size(double.infinity, 50),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                          ),
+                          onPressed: isCreating ? null : () async {
+                            if (nameController.text.trim().isEmpty) {
+                              scaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(content: Text('Enter a team name first')));
+                              return;
+                            }
+
+                            setDialogState(() => isCreating = true);
+                            try {
+                              await _teamService.createTeam(nameController.text.trim(), _authService.getCurrentUserId()!);
+                              scaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(backgroundColor: Colors.green, content: Text('✅ Team created successfully!')));
+                              if (mounted) Navigator.pop(context);
+                            } catch (e) {
+                              scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('❌ Failed: Check Firestore rules ($e)')));
+                              setDialogState(() => isCreating = false);
+                            }
+                          },
+                          child: isCreating
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('Create Team', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+
+                        const Divider(height: 40),
+
+                        const Text('Add Member to Team', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        const Text('Adds member to your first available team.', style: TextStyle(fontSize: 12, color: Colors.grey), textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: emailController,
+                          decoration: InputDecoration(
+                              labelText: 'User Email to Add',
+                              filled: true,
+                              fillColor: Colors.grey.shade100,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: secondaryColor,
+                              minimumSize: const Size(double.infinity, 50),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                          ),
+                          onPressed: isAdding ? null : () async {
+                            if (userTeams.isEmpty) {
+                              scaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(content: Text('Please create a team first!')));
+                              return;
+                            }
+                            if (emailController.text.trim().isEmpty) {
+                              scaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(content: Text('Enter an email address')));
+                              return;
+                            }
+
+                            setDialogState(() => isAdding = true);
+                            try {
+                              final msg = await _teamService.addMemberByEmail(userTeams.first.id, emailController.text.trim());
+                              scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(content: Text(msg!)));
+                              if (mounted) Navigator.pop(context);
+                            } catch (e) {
+                              scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('❌ Failed: $e')));
+                              setDialogState(() => isAdding = false);
+                            }
+                          },
+                          child: isAdding
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('Invite Member', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+        );
+      },
+    );
+  }
+
   // --- FULL SCREEN ACTIVITY MODAL ---
-  void _showFullActivityModal(List<String> allDateKeys, Map<String, List<Budget>> groupedBudgets, bool isAdmin) {
+  void _showFullActivityModal(List<String> allGroupKeys, Map<String, List<Budget>> groupedBudgets, bool isAdmin) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -404,7 +550,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Text('All $categoryLabel', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: textDark)),
               const SizedBox(height: 8),
               Expanded(
-                child: _buildGroupedDatesList(allDateKeys, groupedBudgets, isAdmin, bottomPadding: 40),
+                child: _buildGroupedDatesList(allGroupKeys, groupedBudgets, isAdmin, bottomPadding: 40),
               ),
             ],
           ),
@@ -455,21 +601,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   displayBudgets = currentProfileBudgets.where((b) => b.expenseType == _selectedCategoryFilter).toList();
                 }
 
-                // GROUPING BY DATE FOR FOLDERS
+                // GROUPING BY TEAM FOR FOLDERS
                 Map<String, List<Budget>> groupedBudgets = {};
                 for (var budget in displayBudgets) {
-                  final dateStr = "${budget.dateTime.day}/${budget.dateTime.month}/${budget.dateTime.year}";
-                  if (!groupedBudgets.containsKey(dateStr)) {
-                    groupedBudgets[dateStr] = [];
+                  final groupKey = budget.teamName ?? 'Personal'; // Group by Team
+                  if (!groupedBudgets.containsKey(groupKey)) {
+                    groupedBudgets[groupKey] = [];
                   }
-                  groupedBudgets[dateStr]!.add(budget);
+                  groupedBudgets[groupKey]!.add(budget);
                 }
 
-                List<String> allDateKeys = groupedBudgets.keys.toList();
+                List<String> allGroupKeys = groupedBudgets.keys.toList();
 
-                // Truncate logic for home screen: Only show Top 3 Dates
-                final recentDateKeys = allDateKeys.take(3).toList();
-                final hasMore = allDateKeys.length > 3;
+                // Truncate logic for home screen: Only show Top 3
+                final recentGroupKeys = allGroupKeys.take(3).toList();
+                final hasMore = allGroupKeys.length > 3;
 
                 return Scaffold(
                   backgroundColor: bgColor,
@@ -487,23 +633,48 @@ class _HomeScreenState extends State<HomeScreen> {
                           _buildDashboardCard(currentTotal, 0, isMaster: false),
 
                         const SizedBox(height: 24),
+
+                        // NEW: Added Teams quick-access button to the Home screen
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                          child: Text(
-                            isAdmin ? 'Activity Overview' : 'My Activity',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textDark),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                isAdmin ? 'Activity Overview' : 'My Activity',
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textDark),
+                              ),
+                              InkWell(
+                                onTap: _showManageTeamsDialog,
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: primaryColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.group_add_rounded, size: 16, color: primaryColor),
+                                      const SizedBox(width: 6),
+                                      Text('Teams', style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 13)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
 
                         _buildCategoryFilters(),
 
                         Expanded(
-                          child: allDateKeys.isEmpty
+                          child: allGroupKeys.isEmpty
                               ? _buildEmptyState(isAdmin)
                               : Column(
                             children: [
                               Expanded(
-                                  child: _buildGroupedDatesList(recentDateKeys, groupedBudgets, isAdmin, bottomPadding: hasMore ? 16 : 100)
+                                  child: _buildGroupedDatesList(recentGroupKeys, groupedBudgets, isAdmin, bottomPadding: hasMore ? 16 : 100)
                               ),
                               if (hasMore)
                                 Container(
@@ -515,9 +686,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                         side: BorderSide(color: primaryColor.withOpacity(0.3), width: 1.5),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))
                                     ),
-                                    onPressed: () => _showFullActivityModal(allDateKeys, groupedBudgets, isAdmin),
+                                    onPressed: () => _showFullActivityModal(allGroupKeys, groupedBudgets, isAdmin),
                                     child: Text(
-                                        'View All ${allDateKeys.length} Dates',
+                                        'View All ${allGroupKeys.length} Teams/Folders',
                                         style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 15)
                                     ),
                                   ),
@@ -697,17 +868,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- NEW: DATE FOLDER LIST (Clean, Uncluttered) ---
-  Widget _buildGroupedDatesList(List<String> dateKeys, Map<String, List<Budget>> groupedBudgets, bool isAdmin, {double bottomPadding = 100}) {
+  Widget _buildGroupedDatesList(List<String> groupKeys, Map<String, List<Budget>> groupedBudgets, bool isAdmin, {double bottomPadding = 100}) {
     return ListView.builder(
       padding: EdgeInsets.fromLTRB(24, 8, 24, bottomPadding),
       physics: const BouncingScrollPhysics(),
-      itemCount: dateKeys.length,
+      itemCount: groupKeys.length,
       itemBuilder: (context, index) {
-        String dateKey = dateKeys[index];
-        List<Budget> dayBudgets = groupedBudgets[dateKey]!;
+        String groupKey = groupKeys[index];
+        List<Budget> groupBudgets = groupedBudgets[groupKey]!;
 
-        double dayTotal = dayBudgets.fold(0, (sum, b) => sum + b.amount);
+        double groupTotal = groupBudgets.fold(0, (sum, b) => sum + b.amount);
 
         return Container(
           margin: const EdgeInsets.only(bottom: 16),
@@ -726,12 +896,12 @@ class _HomeScreenState extends State<HomeScreen> {
               leading: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(color: primaryColor.withOpacity(0.08), borderRadius: BorderRadius.circular(14)),
-                child: Icon(Icons.calendar_month_rounded, color: primaryColor),
+                child: Icon(groupKey == 'Personal' ? Icons.person : Icons.groups_rounded, color: primaryColor),
               ),
-              title: Text(dateKey, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: textDark)),
+              title: Text(groupKey, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: textDark)),
               subtitle: Padding(
                 padding: const EdgeInsets.only(top: 4.0),
-                child: Text('${dayBudgets.length} Bills • Total: ₹${dayTotal.toStringAsFixed(0)}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w500)),
+                child: Text('${groupBudgets.length} Bills • Total: ₹${groupTotal.toStringAsFixed(0)}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13, fontWeight: FontWeight.w500)),
               ),
               children: [
                 Container(
@@ -742,7 +912,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24))
                   ),
                   child: Column(
-                    children: dayBudgets.map((budget) {
+                    children: groupBudgets.map((budget) {
                       final isOwnExpense = FirebaseAuth.instance.currentUser?.uid == budget.createdBy;
                       return _buildCompactTransactionTile(budget, isAdmin, isOwnExpense);
                     }).toList(),
@@ -756,7 +926,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- COMPACT INDIVIDUAL BILL (Inside Date Folder) ---
   Widget _buildCompactTransactionTile(Budget budget, bool isAdmin, bool isOwnExpense) {
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -784,10 +953,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Text(budget.expenseType, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: textDark)),
                   const SizedBox(height: 2),
-                  if (isAdmin && !isOwnExpense)
-                    Text('By: ${budget.createdByUsername}', style: TextStyle(fontSize: 11, color: secondaryColor, fontWeight: FontWeight.bold))
-                  else
-                    Text('${budget.dateTime.hour}:${budget.dateTime.minute.toString().padLeft(2, '0')}', style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+                  Text('${budget.dateTime.day}/${budget.dateTime.month}/${budget.dateTime.year} - By: ${budget.createdByUsername}', style: TextStyle(fontSize: 11, color: secondaryColor, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -798,7 +964,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- DETAILED VIEW PANEL (Unchanged, User Loved It) ---
   void _showTransactionDetailsBottomSheet(Budget budget, bool isAdmin, bool isOwnExpense) {
     showModalBottomSheet(
         context: context,
@@ -834,9 +999,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildDetailRow(Icons.calendar_today, 'Date', '${budget.dateTime.day}/${budget.dateTime.month}/${budget.dateTime.year}'),
                 const SizedBox(height: 12),
                 _buildDetailRow(Icons.access_time, 'Time', '${budget.dateTime.hour}:${budget.dateTime.minute.toString().padLeft(2, '0')}'),
-                if (isAdmin) ...[
+                const SizedBox(height: 12),
+                _buildDetailRow(Icons.person_outline, 'Added By', budget.createdByUsername),
+                if (budget.teamName != null) ...[
                   const SizedBox(height: 12),
-                  _buildDetailRow(Icons.person_outline, 'Added By', budget.createdByUsername),
+                  _buildDetailRow(Icons.groups_rounded, 'Team', budget.teamName!),
                 ],
                 const SizedBox(height: 32),
                 const Text('Receipt Image', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -940,6 +1107,7 @@ class _HomeScreenState extends State<HomeScreen> {
       barrierColor: textDark.withOpacity(0.8),
       builder: (dialogContext) {
         return AddBudgetDialog(
+          userTeams: userTeams,
           expenseTypes: expenseTypes,
           categoryBudgets: categoryBudgets,
           currentProfile: currentProfile,
@@ -1069,6 +1237,12 @@ class _HomeScreenState extends State<HomeScreen> {
               Future.delayed(Duration.zero, _showAnalyticsScreen);
             }),
           ],
+
+          const Divider(indent: 24, endIndent: 24),
+          _buildDrawerItem(Icons.group_add_rounded, 'Manage Teams', () {
+            Navigator.pop(context);
+            _showManageTeamsDialog();
+          }),
 
           const SizedBox(height: 20),
           const Divider(indent: 24, endIndent: 24),
