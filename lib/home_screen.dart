@@ -411,119 +411,222 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- UPDATED: Manage Teams Dialog with robust error checking ---
-  void _showManageTeamsDialog() {
+  // --- NEW TEAMS LOGIC ---
+
+  void _handleTeamsAction() {
+    if (userTeams.isEmpty) {
+      // If no teams exist, force them to create one first
+      _showCreateTeamDialog();
+    } else {
+      // If teams exist, manage the first team
+      _showManageSpecificTeamDialog(userTeams.first);
+    }
+  }
+
+  void _showCreateTeamDialog() {
     final nameController = TextEditingController();
-    final emailController = TextEditingController();
+    bool isCreating = false;
 
     showDialog(
       context: context,
       builder: (context) {
-        bool isCreating = false;
-        bool isAdding = false;
-
-        return StatefulBuilder(
-            builder: (context, setDialogState) {
-              return Dialog(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                child: SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('Create a Team', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: nameController,
-                          decoration: InputDecoration(
-                              labelText: 'Team Name',
-                              filled: true,
-                              fillColor: Colors.grey.shade100,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryColor,
-                              minimumSize: const Size(double.infinity, 50),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-                          ),
-                          onPressed: isCreating ? null : () async {
-                            if (nameController.text.trim().isEmpty) {
-                              scaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(content: Text('Enter a team name first')));
-                              return;
-                            }
-
-                            setDialogState(() => isCreating = true);
-                            try {
-                              await _teamService.createTeam(nameController.text.trim(), _authService.getCurrentUserId()!);
-                              scaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(backgroundColor: Colors.green, content: Text('✅ Team created successfully!')));
-                              if (mounted) Navigator.pop(context);
-                            } catch (e) {
-                              scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('❌ Failed: Check Firestore rules ($e)')));
-                              setDialogState(() => isCreating = false);
-                            }
-                          },
-                          child: isCreating
-                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : const Text('Create Team', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        ),
-
-                        const Divider(height: 40),
-
-                        const Text('Add Member to Team', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        const Text('Adds member to your first available team.', style: TextStyle(fontSize: 12, color: Colors.grey), textAlign: TextAlign.center),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: emailController,
-                          decoration: InputDecoration(
-                              labelText: 'User Email to Add',
-                              filled: true,
-                              fillColor: Colors.grey.shade100,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: secondaryColor,
-                              minimumSize: const Size(double.infinity, 50),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-                          ),
-                          onPressed: isAdding ? null : () async {
-                            if (userTeams.isEmpty) {
-                              scaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(content: Text('Please create a team first!')));
-                              return;
-                            }
-                            if (emailController.text.trim().isEmpty) {
-                              scaffoldMessengerKey.currentState?.showSnackBar(const SnackBar(content: Text('Enter an email address')));
-                              return;
-                            }
-
-                            setDialogState(() => isAdding = true);
-                            try {
-                              final msg = await _teamService.addMemberByEmail(userTeams.first.id, emailController.text.trim());
-                              scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(content: Text(msg!)));
-                              if (mounted) Navigator.pop(context);
-                            } catch (e) {
-                              scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(backgroundColor: Colors.redAccent, content: Text('❌ Failed: $e')));
-                              setDialogState(() => isAdding = false);
-                            }
-                          },
-                          child: isAdding
-                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : const Text('Invite Member', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
+        return StatefulBuilder(builder: (context, setDialogState) {
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.group_add, size: 48, color: Color(0xFF2563EB)),
+                  const SizedBox(height: 16),
+                  const Text('Create Your First Team',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const Text('You need to create a team before adding members.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  const SizedBox(height: 24),
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                        labelText: 'Team Name',
+                        filled: true,
+                        fillColor: Colors.grey.shade100,
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none)),
                   ),
-                ),
-              );
-            }
-        );
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        minimumSize: const Size(double.infinity, 50),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12))),
+                    onPressed: isCreating
+                        ? null
+                        : () async {
+                      if (nameController.text.trim().isEmpty) return;
+                      setDialogState(() => isCreating = true);
+                      try {
+                        await _teamService.createTeam(
+                            nameController.text.trim(),
+                            _authService.getCurrentUserId()!);
+                        if (mounted) Navigator.pop(context);
+                        // Open the management dialog immediately after creation
+                        Future.delayed(const Duration(milliseconds: 300), () {
+                          if (userTeams.isNotEmpty) {
+                            _showManageSpecificTeamDialog(userTeams.first);
+                          }
+                        });
+                      } catch (e) {
+                        setDialogState(() => isCreating = false);
+                      }
+                    },
+                    child: isCreating
+                        ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                        : const Text('Create Team',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        });
+      },
+    );
+  }
+
+  void _showManageSpecificTeamDialog(Team team) {
+    bool isAdding = false;
+    String? selectedUserId;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(builder: (context, setDialogState) {
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: _teamService.getAllRegisteredUsers(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(
+                        height: 150,
+                        child: Center(child: CircularProgressIndicator()));
+                  }
+
+                  // Filter out users who are already in the team
+                  final availableUsers = (snapshot.data ?? [])
+                      .where((u) => !team.members.contains(u['uid']))
+                      .toList();
+
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text('Manage: ${team.name}',
+                                style: const TextStyle(
+                                    fontSize: 18, fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                                color: secondaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12)),
+                            child: Text('${team.members.length} Members',
+                                style: TextStyle(
+                                    color: secondaryColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12)),
+                          )
+                        ],
+                      ),
+                      const Divider(height: 32),
+                      const Text('Add Member',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 12),
+                      if (availableUsers.isEmpty)
+                        const Text('No new registered users to add.',
+                            style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic))
+                      else
+                        DropdownButtonFormField<String>(
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                              filled: true,
+                              fillColor: Colors.grey.shade100,
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none)),
+                          hint: const Text('Select a registered user'),
+                          value: selectedUserId,
+                          items: availableUsers.map((user) {
+                            return DropdownMenuItem<String>(
+                              value: user['uid'],
+                              child: Text('${user['username']} (${user['email']})', overflow: TextOverflow.ellipsis),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            setDialogState(() => selectedUserId = val);
+                          },
+                        ),
+                      const SizedBox(height: 20),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: secondaryColor,
+                            minimumSize: const Size(double.infinity, 50),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12))),
+                        onPressed: (isAdding || selectedUserId == null)
+                            ? null
+                            : () async {
+                          setDialogState(() => isAdding = true);
+                          try {
+                            await _teamService.addMemberById(
+                                team.id, selectedUserId!);
+                            scaffoldMessengerKey.currentState?.showSnackBar(
+                                const SnackBar(
+                                    content:
+                                    Text('Member added successfully!')));
+                            if (mounted) Navigator.pop(context);
+                          } catch (e) {
+                            setDialogState(() => isAdding = false);
+                          }
+                        },
+                        child: isAdding
+                            ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                            : const Text('Add to Team',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          );
+        });
       },
     );
   }
@@ -634,7 +737,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                         const SizedBox(height: 24),
 
-                        // NEW: Added Teams quick-access button to the Home screen
+                        // Teams quick-access and Activity header
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 24.0),
                           child: Row(
@@ -645,7 +748,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textDark),
                               ),
                               InkWell(
-                                onTap: _showManageTeamsDialog,
+                                onTap: _handleTeamsAction,
                                 borderRadius: BorderRadius.circular(12),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -665,6 +768,66 @@ class _HomeScreenState extends State<HomeScreen> {
                             ],
                           ),
                         ),
+
+                        // NEW TEAMS HORIZONTAL DISPLAY
+                        if (userTeams.isNotEmpty)
+                          Container(
+                            height: 90,
+                            margin: const EdgeInsets.only(top: 16),
+                            child: ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              scrollDirection: Axis.horizontal,
+                              physics: const BouncingScrollPhysics(),
+                              itemCount: userTeams.length,
+                              itemBuilder: (context, index) {
+                                final team = userTeams[index];
+                                final bool isOwner = team.createdBy == _authService.getCurrentUserId();
+                                return GestureDetector(
+                                  onTap: () => _showManageSpecificTeamDialog(team),
+                                  child: Container(
+                                    width: 200,
+                                    margin: const EdgeInsets.only(right: 16),
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: isOwner ? primaryColor.withOpacity(0.08) : Colors.white,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                          color: isOwner ? primaryColor.withOpacity(0.3) : Colors.grey.shade200),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(Icons.groups_rounded,
+                                                color: isOwner ? primaryColor : Colors.grey.shade600, size: 20),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                team.name,
+                                                style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 15,
+                                                    color: textDark),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          '${team.members.length} Members${isOwner ? ' • Admin' : ''}',
+                                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
 
                         _buildCategoryFilters(),
 
@@ -1241,7 +1404,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const Divider(indent: 24, endIndent: 24),
           _buildDrawerItem(Icons.group_add_rounded, 'Manage Teams', () {
             Navigator.pop(context);
-            _showManageTeamsDialog();
+            _handleTeamsAction();
           }),
 
           const SizedBox(height: 20),

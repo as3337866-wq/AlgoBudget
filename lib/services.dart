@@ -272,11 +272,27 @@ class TeamService {
 
   Future<void> createTeam(String name, String currentUserId) async {
     final doc = _db.collection('teams').doc();
-    await doc.set(Team(id: doc.id, name: name, createdBy: currentUserId, members: [currentUserId]).toJson());
+    await doc.set(Team(
+        id: doc.id,
+        name: name,
+        createdBy: currentUserId,
+        members: [currentUserId])
+        .toJson());
   }
 
+  // NEW: Add a user by their UID directly
+  Future<void> addMemberById(String teamId, String userId) async {
+    await _db.collection('teams').doc(teamId).update({
+      'members': FieldValue.arrayUnion([userId])
+    });
+  }
+
+  // Keep the old email method as fallback
   Future<String?> addMemberByEmail(String teamId, String email) async {
-    final userQuery = await _db.collection('users').where('email', isEqualTo: email.trim()).get();
+    final userQuery = await _db
+        .collection('users')
+        .where('email', isEqualTo: email.trim())
+        .get();
     if (userQuery.docs.isNotEmpty) {
       final userId = userQuery.docs.first.id;
       await _db.collection('teams').doc(teamId).update({
@@ -288,9 +304,22 @@ class TeamService {
   }
 
   Stream<List<Team>> watchUserTeams(String userId) {
-    return _db.collection('teams')
+    return _db
+        .collection('teams')
         .where('members', arrayContains: userId)
         .snapshots()
         .map((snap) => snap.docs.map((d) => Team.fromJson(d.data())).toList());
+  }
+
+  // NEW: Fetch all registered users to display in the dropdown
+  Future<List<Map<String, dynamic>>> getAllRegisteredUsers() async {
+    final snapshot = await _db.collection('users').get();
+    return snapshot.docs.map((doc) {
+      return {
+        'uid': doc.id,
+        'email': doc['email'],
+        'username': doc['username'],
+      };
+    }).toList();
   }
 }
